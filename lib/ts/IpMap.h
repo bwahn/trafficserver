@@ -280,9 +280,9 @@ public:
       return *this;
     }
     /// @return Minimum value of the interval.
-    virtual sockaddr const* min() = 0;
+    virtual sockaddr const* min() const = 0;
     /// @return Maximum value of the interval.
-    virtual sockaddr const* max() = 0;
+    virtual sockaddr const* max() const = 0;
   protected:
     void* _data; ///< Client data.
   };
@@ -393,6 +393,11 @@ public:
     sockaddr const* min, ///< Minimum value.
     sockaddr const* max  ///< Maximum value.
   );
+  /// Unmark addresses (overload).
+  self& unmark(
+    IpEndpoint const* min,
+    IpEndpoint const* max
+  );
   /// Unmark overload.
   self& unmark(
     in_addr_t min, ///< Minimum of range to unmark.
@@ -477,7 +482,7 @@ public:
 
   /// Print all spans.
   /// @return This map.
-  self& print();
+  //  self& print();
 
 protected:
   /// Force the IPv4 map to exist.
@@ -502,6 +507,10 @@ inline IpMap& IpMap::mark(IpEndpoint const* addr, void* data) {
 
 inline IpMap& IpMap::mark(IpEndpoint const* min, IpEndpoint const* max, void* data) {
   return this->mark(&min->sa, &max->sa, data);
+}
+
+inline IpMap& IpMap::unmark(IpEndpoint const* min, IpEndpoint const* max) {
+  return this->unmark(&min->sa, &max->sa);
 }
 
 inline IpMap& IpMap::fill(IpEndpoint const* min, IpEndpoint const* max, void* data) {

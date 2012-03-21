@@ -39,54 +39,54 @@
 
 namespace ts { namespace detail {
 
+// Helper functions
+
 inline int cmp(sockaddr_in6 const& lhs, sockaddr_in6 const& rhs) {
   return memcmp(lhs.sin6_addr.s6_addr, rhs.sin6_addr.s6_addr, INK_IP6_SIZE);
 }
 
-// Helper functions
-
 /// Less than.
 inline bool operator<(sockaddr_in6 const& lhs, sockaddr_in6 const& rhs) {
-  return -1 == ts::detail::cmp(lhs, rhs);
+  return ts::detail::cmp(lhs, rhs) < 0;
 }
 inline bool operator<(sockaddr_in6 const* lhs, sockaddr_in6 const& rhs) {
-  return -1 == ts::detail::cmp(*lhs, rhs);
+  return ts::detail::cmp(*lhs, rhs) < 0;
 }
 /// Less than.
 inline bool operator<(sockaddr_in6 const& lhs, sockaddr_in6 const* rhs) {
-  return -1 == ts::detail::cmp(lhs, *rhs);
+  return ts::detail::cmp(lhs, *rhs) < 0;
 }
 /// Equality.
 inline bool operator==(sockaddr_in6 const& lhs, sockaddr_in6 const* rhs) {
-  return 0 == ts::detail::cmp(lhs, *rhs);
+  return ts::detail::cmp(lhs, *rhs) == 0;
 }
 /// Equality.
 inline bool operator==(sockaddr_in6 const* lhs, sockaddr_in6 const& rhs) {
-  return 0 == ts::detail::cmp(*lhs, rhs);
+  return ts::detail::cmp(*lhs, rhs) == 0;
 }
 /// Equality.
 inline bool operator==(sockaddr_in6 const& lhs, sockaddr_in6 const& rhs) {
-  return 0 == ts::detail::cmp(lhs, rhs);
+  return ts::detail::cmp(lhs, rhs) == 0;
 }
 /// Less than or equal.
 inline bool operator<=(sockaddr_in6 const& lhs, sockaddr_in6 const* rhs) {
-  return 1 != ts::detail::cmp(lhs, *rhs);
+  return ts::detail::cmp(lhs, *rhs) <= 0;
 }
 /// Less than or equal.
 inline bool operator<=(sockaddr_in6 const& lhs, sockaddr_in6 const& rhs) {
-  return 1 != ts::detail::cmp(lhs, rhs);
+  return ts::detail::cmp(lhs, rhs) <= 0;
 }
 /// Greater than or equal.
 inline bool operator>=(sockaddr_in6 const& lhs, sockaddr_in6 const& rhs) {
-  return -1 != ts::detail::cmp(lhs, rhs);
+  return ts::detail::cmp(lhs, rhs) >= 0;
 }
 /// Greater than or equal.
 inline bool operator>=(sockaddr_in6 const& lhs, sockaddr_in6 const* rhs) {
-  return -1 != ts::detail::cmp(lhs, *rhs);
+  return ts::detail::cmp(lhs, *rhs) >= 0;
 }
 /// Greater than.
 inline bool operator>(sockaddr_in6 const& lhs, sockaddr_in6 const* rhs) {
-  return 1 == ts::detail::cmp(lhs, *rhs);
+  return ts::detail::cmp(lhs, *rhs) > 0;
 }
 
 /// Equality.
@@ -556,8 +556,6 @@ template <
   NodeList _list;
 };
 
-// Helper functions
-
 template < typename N > N*
 IpMapBase<N>::lowerBound(ArgType target) {
   N* n = _root; // current node to test.
@@ -589,7 +587,7 @@ IpMapBase<N>::clear() {
 
 template < typename N > IpMapBase<N>&
 IpMapBase<N>::fill(ArgType rmin, ArgType rmax, void* payload) {
-  // Leftmost node of interest with n->_min <= min.
+  // Rightmost node of interest with n->_min <= min.
   N* n = this->lowerBound(rmin);
   N* x = 0; // New node (if any).
   // Need copies because we will modify these.
@@ -599,19 +597,21 @@ IpMapBase<N>::fill(ArgType rmin, ArgType rmax, void* payload) {
   // Handle cases involving a node of interest to the left of the
   // range.
   if (n) {
-    Metric min_1 = min;
-    N::dec(min_1);
-    if (n->_max < min_1) { // no overlap, move on to next node.
-      n = next(n);
-    } else if (n->_max >= max) { // incoming range is covered, just discard.
-      return *this;
-    } else if (n->_data != payload) { // different payload, clip range on left.
-      min = n->_max;
-      N::inc(min);
-      n = next(n);
-    } else { // skew overlap with same payload, use node and continue.
-      x = n;
-      n = next(n);
+    if (n->_min < min) {
+      Metric min_1 = min;
+      N::dec(min_1);  // dec is OK because min isn't zero.
+      if (n->_max < min_1) { // no overlap or adj.
+        n = next(n);
+      } else if (n->_max >= max) { // incoming range is covered, just discard.
+        return *this;
+      } else if (n->_data != payload) { // different payload, clip range on left.
+        min = n->_max;
+        N::inc(min);
+        n = next(n);
+      } else { // skew overlap with same payload, use node and continue.
+        x = n;
+        n = next(n);
+      }
     }
   } else {
     n = this->getHead();
@@ -619,6 +619,11 @@ IpMapBase<N>::fill(ArgType rmin, ArgType rmax, void* payload) {
 
   // Work through the rest of the nodes of interest.
   // Invariant: n->_min >= min
+
+  // Careful here -- because max_plus1 might wrap we need to use it only
+  // if we can certain it didn't. This is done by ordering the range
+  // tests so that when max_plus1 is used when we know there exists a
+  // larger value than max.
   Metric max_plus1 = max;
   N::inc(max_plus1);
   /* Notes:
@@ -628,25 +633,30 @@ IpMapBase<N>::fill(ArgType rmin, ArgType rmax, void* payload) {
   while (n) {
     if (n->_data == payload) {
       if (x) {
-        if (n->_min <= max_plus1) { // overlap so extend x and drop n.
+        if (n->_max <= max) {
+          // next range is covered, so we can remove and continue.
+          this->remove(n);
+          n = next(x);
+        } else if (n->_min <= max_plus1) {
+          // Overlap or adjacent with larger max - absorb and finish.
           x->setMax(n->_max);
           this->remove(n);
-          if (x->_max >= max) return *this; // all done.
-          n = next(x);
+          return *this;
         } else {
           // have the space to finish off the range.
           x->setMax(max);
           return *this;
         }
       } else { // not carrying a span.
-        if (n->_min <= max_plus1) { // overlap, extend and continue.
+        if (n->_max <= max) { // next range is covered - use it.
           x = n;
           x->setMin(min);
-          if (n->_max >= max) return *this; // extend n covers range.
           n = next(n);
+        } else if (n->_min <= max_plus1) {
+          n->setMin(min);
+          return *this;
         } else { // no overlap, space to complete range.
-          N* y = new N(min, max, payload);
-          this->insertBefore(n, y);
+          this->insertBefore(n, new N(min, max, payload));
           return *this;
         }
       }
@@ -662,19 +672,25 @@ IpMapBase<N>::fill(ArgType rmin, ArgType rmax, void* payload) {
           x->setMaxMinusOne(n->_min);
           x = 0;
           min = n->_max;
+          N::inc(min); // OK because n->_max maximal => next is null.
+          n = next(n);
+        }
+      } else { // no carry node.
+        if (max < n->_min) { // entirely before next span.
+          this->insertBefore(n, new N(min, max, payload));
+          return *this;
+        } else {
+          if (min < n->_min) { // leading section, need node.
+            N* y = new N(min, n->_min, payload);
+            y->decrementMax();
+            this->insertBefore(n, y);
+          }
+          if (max <= n->_max) // nothing past node
+            return *this;
+          min = n->_max;
           N::inc(min);
           n = next(n);
         }
-      } else {
-        if (min < n->_min) { // Need a span before n.
-          N* y = new N(min, n->_min, payload);
-          y->decrementMax();
-          this->insertBefore(n, y);
-        }
-        if (max <= n->_max) return *this;
-        min = n->_max;
-        N::inc(min);
-        n = next(n);
       }
     }
   }
@@ -691,8 +707,10 @@ template < typename N > IpMapBase<N>&
 IpMapBase<N>::mark(ArgType min, ArgType max, void* payload) {
   N* n = this->lowerBound(min); // current node.
   N* x = 0; // New node, gets set if we re-use an existing one.
+  N* y = 0; // Temporary for removing and advancing.
 
-  // Several places it is handy to have max+1.
+  // Several places it is handy to have max+1. Must be careful
+  // about wrapping.
   Metric max_plus = N::deref(max);
   N::inc(max_plus);
 
@@ -712,11 +730,13 @@ IpMapBase<N>::mark(ArgType min, ArgType max, void* payload) {
       allocation by re-using an existing node as often as possible.
   */
   if (n) {
+    // Watch for wrap.
     Metric min_1 = N::deref(min);
     N::dec(min_1);
     if (n->_min == min) {
       // Could be another span further left which is adjacent.
-      // Coalesce if the data is the same.
+      // Coalesce if the data is the same. min_1 is OK because
+      // if there is a previous range, min is not zero.
       N* p = prev(n);
       if (p && p->_data == payload && p->_max == min_1) {
         x = p;
@@ -736,6 +756,7 @@ IpMapBase<N>::mark(ArgType min, ArgType max, void* payload) {
         return *this;
       }
     } else if (n->_data == payload && n->_max >= min_1) {
+      // min_1 is safe here because n->_min < min so min is not zero.
       x = n;
       // If the existing span covers the requested span, we're done.
       if (x->_max >= max) return *this;
@@ -753,6 +774,7 @@ IpMapBase<N>::mark(ArgType min, ArgType max, void* payload) {
     } else {
       // Existing span covers new span but with a different payload.
       // We split it, put the new span in between and we're done.
+      // max_plus is valid because n->_max > max.
       N* r;
       x = new N(min, max, payload);
       r = new N(max_plus, n->_max, n->_data);
@@ -767,9 +789,9 @@ IpMapBase<N>::mark(ArgType min, ArgType max, void* payload) {
       if (n) this->insertBefore(n, x);
       else this->append(x); // note that since n == 0 we'll just return.
     }
-  } else if (0 != (n = this->getHead()) &&
-    n->_data == payload &&
-    n->_min <= max_plus
+  } else if (0 != (n = this->getHead()) && // at least one node in tree.
+             n->_data == payload && // payload matches
+             (n->_max <= max || n->_min <= max_plus) // overlap or adj.
   ) {
     // Same payload with overlap, re-use.
     x = n;
@@ -784,26 +806,19 @@ IpMapBase<N>::mark(ArgType min, ArgType max, void* payload) {
   // At this point, @a x has the node for this span and all existing spans of
   // interest start at or past this span.
   while (n) {
-    if (n->_data == payload) {
-      if (n->_max <= max_plus) { // completely covered, drop span, continue
-        N* r = next(n);
-        this->remove(n);
-        n = r;
-      } else if (n->_min <= max_plus) {// skew overlap on the right.
-        x->setMax(n->_max);
-        this->remove(n);
-        break;
-      } else { // no overlap, done
-        break;
-      }
-    } else if (n->_max <= max) { // covered, discard and continue.
-      N* r = next(n);
-      this->remove(n);
-      n = r;
-    } else if (n->_min <= max) { // skew overlap, clip and done.
-      n->setMin(max_plus);
+    if (n->_max <= max) { // completely covered, drop span, continue
+      y = n;
+      n = next(n);
+      this->remove(y);
+    } else if (max_plus < n->_min) { // no overlap, done.
       break;
-    } else { // no overlap, done.
+    } else if (n->_data == payload) { // skew overlap or adj., same payload
+      x->setMax(n->_max);
+      y = n;
+      n = next(n);
+      this->remove(y);
+    } else if (n->_min <= max) { // skew overlap different payload
+      n->setMin(max_plus);
       break;
     }
   }
@@ -819,18 +834,15 @@ IpMapBase<N>::unmark(ArgType min, ArgType max) {
   // Need to handle special case where first span starts to the left.
   if (n && n->_min < min) {
     if (n->_max >= min) { // some overlap
-      Metric min_1 = N::deref(min);
-      N::dec(min_1);
       if (n->_max > max) {
         // request span is covered by existing span - split existing span.
-        Metric max_plus = N::deref(max);
-        N::inc(max_plus);
-        x = new N(max_plus, n->_max, n->_data);
-        n->setMax(min_1);
+        x = new N(max, N::argue(n->_max), n->_data);
+        x->incrementMin();
+        n->setMaxMinusOne(N::deref(min));
         this->insertAfter(n, x);
         return *this; // done.
       } else {
-        n->setMax(min_1); // just clip overloap.
+        n->setMaxMinusOne(N::deref(min)); // just clip overlap.
       }
     } // else disjoint so just skip it.
     n = next(n);
@@ -843,9 +855,7 @@ IpMapBase<N>::unmark(ArgType min, ArgType max) {
       this->remove(x);
     } else {
       if (x->_min <= max) { // clip overlap
-        Metric max_plus = N::deref(max);
-        N::inc(max_plus);
-        x->setMin(max_plus);
+        x->setMinPlusOne(N::deref(max));
       }
       break;
     }
@@ -966,11 +976,11 @@ public:
     ats_ip4_set(ats_ip_sa_cast(&_sa._max), htonl(max));
   }
   /// @return The minimum value of the interval.
-  virtual sockaddr const* min() {
+  virtual sockaddr const* min() const {
     return ats_ip_sa_cast(&_sa._min);
   }
   /// @return The maximum value of the interval.
-  virtual sockaddr const* max() {
+  virtual sockaddr const* max() const {
     return ats_ip_sa_cast(&_sa._max);
   }
   /// Set the client data.
@@ -1023,6 +1033,13 @@ protected:
   */
   self& decrementMax() {
     this->setMax(_max-1);
+    return *this;
+  }
+  /** Increment the minimum value in place.
+      @return This object.
+  */
+  self& incrementMin() {
+    this->setMin(_min+1);
     return *this;
   }
 
@@ -1093,11 +1110,11 @@ public:
   ) : Node(data), Ip6Span(min, max) {
   }
   /// @return The minimum value of the interval.
-  virtual sockaddr const* min() {
+  virtual sockaddr const* min() const {
     return ats_ip_sa_cast(&_min);
   }
   /// @return The maximum value of the interval.
-  virtual sockaddr const* max() {
+  virtual sockaddr const* max() const {
     return ats_ip_sa_cast(&_max);
   }
   /// Set the client data.
@@ -1167,6 +1184,10 @@ protected:
       @return This object.
   */
   self& decrementMax() { dec(_max); return *this; }
+  /** Increment the mininimum value in place.
+      @return This object.
+  */
+  self& incrementMin() { inc(_min); return *this; }
   
   /// Increment a metric.
   static void inc(
@@ -1198,6 +1219,13 @@ protected:
     ArgType addr ///< Argument to dereference.
   ) {
     return *addr;
+  }
+  
+  /// @return The argument type for the @a metric.
+  static ArgType argue(
+    Metric const& metric
+  ) {
+    return &metric;
   }
   
 };
