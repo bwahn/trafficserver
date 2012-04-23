@@ -50,6 +50,8 @@
 #include "IPAllow.h"
 
 static const char *URL_MSG = "Unable to process requested URL.\n";
+static char range_type[] = "multipart/byteranges; boundary=RANGE_SEPARATOR";
+#define RANGE_NUMBERS_LENGTH 60
 
 #define HTTP_INCREMENT_TRANS_STAT(X) update_stat(s, X, 1);
 #define HTTP_SUM_TRANS_STAT(X,S) update_stat(s, X, S);
@@ -2706,7 +2708,7 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
       // only if the cached response is a 200 OK
       if (client_response_code == HTTP_STATUS_OK && client_request->presence(MIME_PRESENCE_RANGE)) {
         s->state_machine->do_range_setup_if_necessary();
-        if (s->range_setup == RANGE_NOT_SATISFIABLE && s->http_config_param->reverse_proxy_enabled) {
+        if (s->range_setup == RANGE_NOT_SATISFIABLE) {
           build_error_response(s, HTTP_STATUS_RANGE_NOT_SATISFIABLE, "Requested Range Not Satisfiable","","");
           s->cache_info.action = CACHE_DO_NO_ACTION;
           s->next_action = PROXY_INTERNAL_CACHE_NOOP;
@@ -6687,13 +6689,21 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
 
         switch (s->source) {
         case SOURCE_CACHE:
+          
+          // if we are doing a single Range: request, calculate the new
+          // C-L: header
+          if (s->range_setup == HttpTransact::RANGE_REQUESTED && s->num_range_fields == 1) {
+            Debug("http_trans", "Partial content requested, re-calculating content-length");
+            change_response_header_because_of_range_request(s,header);
+            s->hdr_info.trust_response_cl = true;
+          }
           ////////////////////////////////////////////////
           //  Make sure that the cache's object size    //
           //   agrees with the Content-Length           //
           //   Otherwise, set the state's machine view  //
           //   of c-l to undefined to turn off K-A      //
           ////////////////////////////////////////////////
-          if ((int64_t) s->cache_info.object_read->object_size_get() == cl) {
+          else if ((int64_t) s->cache_info.object_read->object_size_get() == cl) {
             s->hdr_info.trust_response_cl = true;
           } else {
             DebugTxn("http_trans", "Content Length header and cache object size mismatch." "Disabling keep-alive");
@@ -6719,6 +6729,7 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
         header->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
         s->hdr_info.trust_response_cl = false;
       }
+      Debug("http_trans", "[handle_content_length_header] RESPONSE cont len in hdr is %"PRId64, header->get_content_length());
     } else {
       // No content length header
       if (s->source == SOURCE_CACHE) {
@@ -6732,7 +6743,15 @@ HttpTransact::handle_content_length_header(State* s, HTTPHdr* header, HTTPHdr* b
           header->field_delete(MIME_FIELD_CONTENT_LENGTH, MIME_LEN_CONTENT_LENGTH);
           s->hdr_info.trust_response_cl = false;
           s->hdr_info.request_content_length = HTTP_UNDEFINED_CL;
-        } else {
+        } 
+        else if (s->range_setup == HttpTransact::RANGE_REQUESTED && s->num_range_fields == 1) {
+          // if we are doing a single Range: request, calculate the new
+          // C-L: header
+          Debug("http_trans", "Partial content requested, re-calculating content-length");
+          change_response_header_because_of_range_request(s,header);
+          s->hdr_info.trust_response_cl = true;
+        }
+        else {
           header->set_content_length(cl);
           s->hdr_info.trust_response_cl = true;
         }
@@ -8849,5 +8868,41 @@ HttpTransact::delete_warning_value(HTTPHdr* to_warn, HTTPWarningCode warning_cod
 
       val_code = iter.get_next_int(&valid);
     }
+  }
+}
+
+void
+HttpTransact::change_response_header_because_of_range_request(State *s, HTTPHdr * header)
+{
+  MIMEField *field;
+  char *reason_phrase;
+
+  ink_assert(header->field_find(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE) == NULL);
+
+  header->status_set(HTTP_STATUS_PARTIAL_CONTENT);
+  reason_phrase = (char *) (http_hdr_reason_lookup(HTTP_STATUS_PARTIAL_CONTENT));
+  header->reason_set(reason_phrase, strlen(reason_phrase));
+
+  // set the right Content-Type for multiple entry Range
+  if (s->num_range_fields > 1) {
+    field = header->field_find(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
+
+    if (field != NULL)
+      header->field_delete(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
+
+    field = header->field_create(MIME_FIELD_CONTENT_TYPE, MIME_LEN_CONTENT_TYPE);
+    field->value_append(header->m_heap, header->m_mime, range_type, sizeof(range_type) - 1);
+
+    header->field_attach(field);
+    header->set_content_length(s->range_output_cl);
+  }
+  else {
+    char numbers[RANGE_NUMBERS_LENGTH];
+
+    field = header->field_create(MIME_FIELD_CONTENT_RANGE, MIME_LEN_CONTENT_RANGE);
+    snprintf(numbers, sizeof(numbers), "bytes %"PRId64"-%"PRId64"/%"PRId64, s->ranges[0]._start, s->ranges[0]._end, s->cache_info.object_read->object_size_get());
+    field->value_append(header->m_heap, header->m_mime, numbers, strlen(numbers));
+    header->field_attach(field);
+    header->set_content_length(s->range_output_cl);
   }
 }

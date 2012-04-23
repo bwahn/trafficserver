@@ -925,15 +925,23 @@ HttpTunnel::producer_run(HttpTunnelProducer * p)
       Debug("http_tunnel", "[%" PRId64 "] [tunnel_run] producer already done", sm->sm_id);
       producer_handler(HTTP_TUNNEL_EVENT_PRECOMPLETE, p);
     } else {
-      p->read_vio = p->vc->do_io_read(this, producer_n, p->read_buffer);
+      if (p->vc_type == HT_CACHE_READ && sm->t_state.range_setup == HttpTransact::RANGE_REQUESTED && sm->t_state.num_range_fields == 1) {
+        int64_t start_pos = sm->t_state.ranges[0]._start;
+        int64_t end_pos   = sm->t_state.ranges[0]._end;
+        p->read_vio = ((CacheVC*)p->vc)->do_io_pread(this, (end_pos - start_pos)+1, p->read_buffer, start_pos);
+      }
+      else {
+        p->read_vio = p->vc->do_io_read(this, producer_n, p->read_buffer);
+      }
     }
-
-    // Now that the tunnel has started, we must remove producer's reader so
-    // that it doesn't act like a buffer guard
-    p->read_buffer->dealloc_reader(p->buffer_start);
-    p->buffer_start = NULL;
   }
+
+  // Now that the tunnel has started, we must remove producer's reader so
+  // that it doesn't act like a buffer guard
+  p->read_buffer->dealloc_reader(p->buffer_start);
+  p->buffer_start = NULL;
 }
+
 
 int
 HttpTunnel::producer_handler_dechunked(int event, HttpTunnelProducer * p)
