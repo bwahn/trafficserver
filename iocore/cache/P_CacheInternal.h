@@ -435,7 +435,7 @@ struct CacheVC: public CacheVConnection
   int base_stat;
   int recursive;
   int closed;
-  int64_t seek_to;                // pread offset
+  uint64_t seek_to;               // pread offset
   int64_t offset;                 // offset into 'blocks' of data to write
   int64_t writer_offset;          // offset of the writer for reading from a writer
   int64_t length;                 // length of data available to write

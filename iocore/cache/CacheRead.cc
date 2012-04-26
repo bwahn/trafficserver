@@ -624,40 +624,50 @@ CacheVC::openReadMain(int event, Event * e)
   int64_t bytes = doc->len - doc_pos;
   IOBufferBlock *b = NULL;
   if (seek_to) { // handle do_io_pread
-    if (seek_to >= (int)doc_len) {
+    if (seek_to >= doc_len) {
       vio.ndone = doc_len;
       return calluser(VC_EVENT_EOS);
     }
     Doc *first_doc = (Doc*)first_buf->data();
-    Frag *first_frag = first_doc->frags();
+    Frag *frags = first_doc->frags();
     if (!f.single_fragment) {
-      // find the target fragment
-      int i = 0;
-      for (; i < (int)first_doc->nfrags(); i++)
-        if (seek_to < (int64_t)first_frag[i].offset) break;
-      if (i >= (int)first_doc->nfrags()) {
-        Warning("bad fragment header");
-        return calluser(VC_EVENT_ERROR);
+      // Last Fragment Index
+      int lfi = static_cast<int>(first_doc->nfrags()) - 1;
+      int target = fragment; // index of target fragment.
+      ink_debug_assert(lfi > 0); // because it's not a single frag doc.
+
+      // 3 cases - seek earlier fragment, seek later fragment,
+      // or seek target is in the current fragment. We only schedule a read
+      // for the first two. A bit overkill but we do want to check if we're
+      // already in the fragment and once we do that, we might as well do this.
+      if (seek_to < frags[fragment].offset) {
+        ink_debug_assert(fragment > 0);
+        target = fragment - 1;
+      } else if (fragment < lfi && seek_to >= frags[fragment+1].offset) {
+        target = lfi; // should terminate before target == fragment
       }
-      // fragment is the current fragment
-      // key is the next key (fragment + 1)
-      if (i != fragment) {
-        i--; // read will increment the key and fragment
-        while (i > fragment) {
+      if (target != fragment) {
+        // We search down because offset is the start of the fragment.
+        while ( target > 0 && seek_to < frags[target].offset )
+          --target;
+        Note("Seek %d:%"PRId64" -> %d:%"PRId64, fragment, doc_pos, target, seek_to);
+        // fragment is the current fragment
+        // key is the next key (fragment + 1)
+        ink_debug_assert(target != fragment);
+        --target; // read will increment the key and fragment
+        while (target > fragment) {
           next_CacheKey(&key, &key);
-          fragment++;
+          ++fragment;
         }
-        while (i < fragment) {
+        while (target < fragment) {
           prev_CacheKey(&key, &key);
-          fragment--;
+          --fragment;
         }
         goto Lread;
       }
     }
-    if (fragment)
-      doc_pos = doc->prefix_len() + seek_to - (int64_t)first_frag[fragment-1].offset;
-    else
-      doc_pos = doc->prefix_len() + seek_to; 
+    doc_pos = doc->prefix_len() + seek_to;
+    if (fragment) doc_pos -= static_cast<int64_t>(frags[fragment-1].offset);
     vio.ndone = 0;
     seek_to = 0;
     ntodo = vio.ntodo();
