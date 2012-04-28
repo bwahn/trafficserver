@@ -1240,6 +1240,15 @@ public:
       url_map.clear();
       arena.reset();
       pristine_url.clear();
+      /*
+      delete[] ranges;
+      range_setup = RANGE_NONE;
+      unsatisfiable_range = true;
+      not_handle_range = false;
+      num_range_fields = 0;
+      range_output_cl = 0;
+      current_range = -1;
+      */
       return;
     }
 

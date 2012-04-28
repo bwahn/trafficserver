@@ -647,6 +647,9 @@ CacheVC::openReadMain(int event, Event * e)
         target = lfi; // should terminate before target == fragment
       }
       if (target != fragment) {
+        char first_key_str[33], current_key_str[33], target_key_str[33];
+        first_doc->first_key.toStr(first_key_str);
+        key.toStr(current_key_str);
         // We search down because offset is the start of the fragment.
         while ( target > 0 && seek_to < frags[target].offset )
           --target;
@@ -663,6 +666,8 @@ CacheVC::openReadMain(int event, Event * e)
           prev_CacheKey(&key, &key);
           --fragment;
         }
+        key.toStr(target_key_str);
+        Note("Seek %s -> %s in %s", current_key_str, target_key_str, first_key_str);
         goto Lread;
       }
     }
