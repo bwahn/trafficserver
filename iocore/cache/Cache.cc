@@ -1889,6 +1889,8 @@ CacheVC::handleReadDone(int event, Event *e) {
     }
 #endif
     Doc *doc = (Doc *) buf->data();
+    char xt[33];
+    Note("Read fragment %s len=%d/%"PRId64"/%"PRId64" %d/%d frags", doc->key.toHexStr(xt), doc->len, doc->total_len, doc_len, fragment, doc->nfrags());
     // put into ram cache?
     if (io.ok() &&
         ((doc->first_key == *read_key) || (doc->key == *read_key) || STORE_COLLISION) && doc->magic == DOC_MAGIC) {

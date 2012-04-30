@@ -440,6 +440,7 @@ CacheVC::openReadFromWriter(int event, Event * e)
     MUTEX_RELEASE(writer_lock);
     // either a header + body update or a new document
     SET_HANDLER(&CacheVC::openReadStartEarliest);
+    Note("Cache start earliest - openReadFromWriter");
     return openReadStartEarliest(event, e);
   }
   writer_buf = write_vc->blocks;
@@ -772,6 +773,7 @@ CacheVC::openReadStartEarliest(int event, Event * e)
   set_io_not_in_progress();
   if (_action.cancelled)
     return free_CacheVC(this);
+  Note("openReadStartEarliest");
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock)
@@ -975,6 +977,7 @@ CacheVC::openReadStartHead(int event, Event * e)
   set_io_not_in_progress();
   if (_action.cancelled)
     return free_CacheVC(this);
+  Note("openReadStartHead");
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock)
@@ -1137,6 +1140,7 @@ Learliest:
   buf = NULL;
   earliest_key = key;
   last_collision = NULL;
+  Note("Cache Start Earliest from openReadStartHead");
   SET_HANDLER(&CacheVC::openReadStartEarliest);
   return openReadStartEarliest(event, e);
 }
