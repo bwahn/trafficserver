@@ -2918,7 +2918,9 @@ HttpSM::is_bg_fill_necessary(HttpTunnelConsumer * c)
 
   // There must be another consumer for it to worthwhile to
   //  set up a background fill
-  if (c->producer->num_consumers > 1 && c->producer->vc_type == HT_HTTP_SERVER && c->producer->alive == true) {
+  if (c->producer->num_consumers > 1 &&
+      (c->producer->vc_type == HT_HTTP_SERVER  || c->producer->vc_type == HT_TRANSFORM) &&
+      c->producer->alive == true) {
     // If threshold is 0.0 or negative then do background
     //   fill regardless of the content length.  Since this
     //   is floating point just make sure the number is near zero
@@ -4260,23 +4262,6 @@ HttpSM::do_http_server_open(bool raw)
   ink_assert(t_state.current.server->port > 0);
 
   HSMresult_t shared_result;
-  NetVCOptions opt;
-  opt.f_blocking_connect = false;
-  opt.set_sock_param(t_state.txn_conf->sock_recv_buffer_size_out,
-                     t_state.txn_conf->sock_send_buffer_size_out,
-                     t_state.txn_conf->sock_option_flag_out);
-
-  opt.local_port = ua_session->outbound_port;
-  opt.ip_family = ip_family;
-
-  IpAddr& outbound_ip = AF_INET6 == ip_family ? ua_session->outbound_ip6 : ua_session->outbound_ip4;
-  if (outbound_ip.isValid()) {
-    opt.addr_binding = NetVCOptions::INTF_ADDR;
-    opt.local_ip = outbound_ip;
-  } else if (ua_session->f_outbound_transparent) {
-    opt.addr_binding = NetVCOptions::FOREIGN_ADDR;
-    opt.local_ip = t_state.client_info.addr;
-  }
 
   t_state.current.server->addr.port() = htons(t_state.current.server->port);
 
@@ -4424,6 +4409,27 @@ HttpSM::do_http_server_open(bool raw)
   // We did not manage to get an exisiting session
   //  and need to open a new connection
   Action *connect_action_handle;
+
+  NetVCOptions opt;
+  opt.f_blocking_connect = false;
+  opt.set_sock_param(t_state.txn_conf->sock_recv_buffer_size_out,
+                     t_state.txn_conf->sock_send_buffer_size_out,
+                     t_state.txn_conf->sock_option_flag_out);
+
+  opt.ip_family = ip_family;
+
+  if (ua_session) {
+    opt.local_port = ua_session->outbound_port;
+
+    IpAddr& outbound_ip = AF_INET6 == ip_family ? ua_session->outbound_ip6 : ua_session->outbound_ip4;
+    if (outbound_ip.isValid()) {
+      opt.addr_binding = NetVCOptions::INTF_ADDR;
+      opt.local_ip = outbound_ip;
+    } else if (ua_session->f_outbound_transparent) {
+      opt.addr_binding = NetVCOptions::FOREIGN_ADDR;
+      opt.local_ip = t_state.client_info.addr;
+    }
+  }
 
   if (t_state.scheme == URL_WKSIDX_HTTPS) {
     DebugSM("http", "calling sslNetProcessor.connect_re");

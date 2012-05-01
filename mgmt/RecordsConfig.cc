@@ -87,9 +87,9 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CONFIG, "proxy.config.cop.core_signal", RECD_INT, "0", RECU_NULL, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,                             // needed by traffic_cop
-  {RECT_CONFIG, "proxy.config.cop.linux_min_swapfree_kb", RECD_INT, "10240", RECU_NULL, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  {RECT_CONFIG, "proxy.config.cop.linux_min_swapfree_kb", RECD_INT, "0", RECU_NULL, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,                             // needed by traffic_cop
-  {RECT_CONFIG, "proxy.config.cop.linux_min_memfree_kb", RECD_INT, "10240", RECU_NULL, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
+  {RECT_CONFIG, "proxy.config.cop.linux_min_memfree_kb", RECD_INT, "0", RECU_NULL, RR_REQUIRED, RECC_NULL, NULL, RECA_NULL}
   ,                             // needed by traffic_cop
   //# 0 = disable (seconds)
   {RECT_CONFIG, "proxy.config.dump_mem_info_frequency", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
@@ -955,25 +955,11 @@ RecordElement RecordsConfig[] = {
   ,
   //  # The maximum size of a document that will be stored in the cache.
   //  # (0 disables the maximum document size check)
-  {RECT_CONFIG, "proxy.config.net.enable_ink_disk_io", RECD_INT, "0", RECU_RESTART_TS, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
-  {RECT_CONFIG, "proxy.config.net.ink_disk_io_watermark", RECD_INT, "400", RECU_RESTART_TS, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
-  {RECT_CONFIG, "proxy.config.net.ink_aio_write_threads", RECD_INT, "10", RECU_RESTART_TS, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
-  {RECT_CONFIG, "proxy.config.net.max_kqueue_len", RECD_INT, "0", RECU_RESTART_TS, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
   {RECT_CONFIG, "proxy.config.cache.max_doc_size", RECD_INT, "0", RECU_DYNAMIC, RR_NULL, RECC_STR, "^[0-9]+$", RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cache.min_average_object_size", RECD_INT, "8000", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
-  {RECT_CONFIG, "proxy.config.cache.max_agg_delay", RECD_INT, "1000", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
   {RECT_CONFIG, "proxy.config.cache.threads_per_disk", RECD_INT, "8", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
-  {RECT_CONFIG, "proxy.config.cache.aio_sleep_time", RECD_INT, "100", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
-  ,
-  {RECT_CONFIG, "proxy.config.cache.check_disk_idle", RECD_INT, "1", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CONFIG, "proxy.config.cache.agg_write_backlog", RECD_INT, "5242880", RECU_DYNAMIC, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
@@ -1476,6 +1462,12 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_NODE, "proxy.node.cache_hit_ratio_avg_10s_int_pct", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_NODE, "proxy.node.cache_hit_mem_ratio", RECD_FLOAT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_NODE, "proxy.node.cache_hit_mem_ratio_int_pct", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_NODE, "proxy.node.cache_hit_mem_ratio_avg_10s_int_pct", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   {RECT_NODE, "proxy.node.bandwidth_hit_ratio_avg_10s_int_pct", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
 
@@ -1486,6 +1478,8 @@ RecordElement RecordsConfig[] = {
   {RECT_NODE, "proxy.node.bandwidth_hit_ratio_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_NODE, "proxy.node.http.cache_hit_fresh_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_NODE, "proxy.node.http.cache_hit_mem_fresh_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_NODE, "proxy.node.http.cache_hit_revalidated_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
@@ -1507,9 +1501,13 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_NODE, "proxy.node.cache_total_hits_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_NODE, "proxy.node.cache_total_hits_mem_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   {RECT_NODE, "proxy.node.cache_total_misses_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_NODE, "proxy.node.cache_hit_ratio_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_NODE, "proxy.node.cache_hit_mem_ratio_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_NODE, "proxy.node.hostdb.total_lookups_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
@@ -1685,6 +1683,8 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_NODE, "proxy.node.cache_total_hits", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_NODE, "proxy.node.cache_total_hits_mem", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   {RECT_NODE, "proxy.node.cache_total_misses", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_NODE, "proxy.node.current_cache_connections", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
@@ -1786,6 +1786,10 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CLUSTER, "proxy.cluster.cache_hit_ratio_int_pct", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_CLUSTER, "proxy.cluster.cache_hit_mem_ratio", RECD_FLOAT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CLUSTER, "proxy.cluster.cache_hit_mem_ratio_int_pct", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   {RECT_CLUSTER, "proxy.cluster.cache_total_hits", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CLUSTER, "proxy.cluster.cache_total_misses", RECD_INT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
@@ -1794,9 +1798,13 @@ RecordElement RecordsConfig[] = {
   ,
   {RECT_CLUSTER, "proxy.cluster.cache_total_hits_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
+  {RECT_CLUSTER, "proxy.cluster.cache_total_hits_mem_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
   {RECT_CLUSTER, "proxy.cluster.cache_total_misses_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   {RECT_CLUSTER, "proxy.cluster.cache_hit_ratio_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
+  ,
+  {RECT_CLUSTER, "proxy.cluster.cache_hit_mem_ratio_avg_10s", RECD_FLOAT, "0.0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}
   ,
   //# DNS
   {RECT_CLUSTER, "proxy.cluster.dns.lookups_per_second", RECD_FLOAT, "0", RECU_NULL, RR_NULL, RECC_NULL, NULL, RECA_NULL}

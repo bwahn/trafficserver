@@ -54,7 +54,7 @@ static char range_type[] = "multipart/byteranges; boundary=RANGE_SEPARATOR";
 #define RANGE_NUMBERS_LENGTH 60
 
 #define HTTP_INCREMENT_TRANS_STAT(X) update_stat(s, X, 1);
-#define HTTP_SUM_TRANS_STAT(X,S) update_stat(s, X, S);
+#define HTTP_SUM_TRANS_STAT(X,S) update_stat(s, X, (ink_statval_t) S);
 
 #define TRANSACT_REMEMBER(_s,_e,_d) \
 { \
@@ -933,7 +933,7 @@ HttpTransact::EndRemapRequest(State* s)
     }
   }
   s->reverse_proxy = true;
-  s->server_info.is_transparent = s->state_machine->ua_session->f_outbound_transparent;
+  s->server_info.is_transparent = s->state_machine->ua_session ? s->state_machine->ua_session->f_outbound_transparent : false;
 
 done:
   /**
@@ -6544,7 +6544,7 @@ HttpTransact::process_quick_http_filter(State* s, int method)
     return;
   }
 
-  if (!IpAllow::CheckMask(s->state_machine->ua_session->acl_method_mask, method)) {
+  if (s->state_machine->ua_session && (!IpAllow::CheckMask(s->state_machine->ua_session->acl_method_mask, method))) {
     if (is_debug_tag_set("ip-allow")) {
       ip_text_buffer ipb;
       Debug("ip-allow", "Quick filter denial on %s:%s with mask %x", ats_ip_ntop(&s->client_info.addr.sa, ipb, sizeof(ipb)), hdrtoken_index_to_wks(method), s->state_machine->ua_session->acl_method_mask);
@@ -8422,8 +8422,9 @@ HttpTransact::client_result_stat(State* s, ink_hrtime total_time, ink_hrtime req
     client_transaction_result = CLIENT_TRANSACTION_RESULT_ERROR_CONNECT_FAIL;
     break;
 
-  case SQUID_LOG_TCP_HIT:
   case SQUID_LOG_TCP_MEM_HIT:
+    HTTP_INCREMENT_TRANS_STAT(http_cache_hit_mem_fresh_stat);
+  case SQUID_LOG_TCP_HIT:
     // It's possible to have two stat's instead of one, if needed.
     HTTP_INCREMENT_TRANS_STAT(http_cache_hit_fresh_stat);
     client_transaction_result = CLIENT_TRANSACTION_RESULT_HIT_FRESH;
@@ -8508,59 +8509,59 @@ HttpTransact::client_result_stat(State* s, ink_hrtime total_time, ink_hrtime req
     int status_code = s->hdr_info.client_response.status_get();
 
     switch(status_code) {
-    case 100: HTTP_SUM_TRANS_STAT(http_response_status_100_count_stat, 1); break;
-    case 101: HTTP_SUM_TRANS_STAT(http_response_status_101_count_stat, 1); break;
-    case 200: HTTP_SUM_TRANS_STAT(http_response_status_200_count_stat, 1); break;
-    case 201: HTTP_SUM_TRANS_STAT(http_response_status_201_count_stat, 1); break;
-    case 202: HTTP_SUM_TRANS_STAT(http_response_status_202_count_stat, 1); break;
-    case 203: HTTP_SUM_TRANS_STAT(http_response_status_203_count_stat, 1); break;
-    case 204: HTTP_SUM_TRANS_STAT(http_response_status_204_count_stat, 1); break;
-    case 205: HTTP_SUM_TRANS_STAT(http_response_status_205_count_stat, 1); break;
-    case 206: HTTP_SUM_TRANS_STAT(http_response_status_206_count_stat, 1); break;
-    case 300: HTTP_SUM_TRANS_STAT(http_response_status_300_count_stat, 1); break;
-    case 301: HTTP_SUM_TRANS_STAT(http_response_status_301_count_stat, 1); break;
-    case 302: HTTP_SUM_TRANS_STAT(http_response_status_302_count_stat, 1); break;
-    case 303: HTTP_SUM_TRANS_STAT(http_response_status_303_count_stat, 1); break;
-    case 304: HTTP_SUM_TRANS_STAT(http_response_status_304_count_stat, 1); break;
-    case 305: HTTP_SUM_TRANS_STAT(http_response_status_305_count_stat, 1); break;
-    case 307: HTTP_SUM_TRANS_STAT(http_response_status_307_count_stat, 1); break;
-    case 400: HTTP_SUM_TRANS_STAT(http_response_status_400_count_stat, 1); break;
-    case 401: HTTP_SUM_TRANS_STAT(http_response_status_401_count_stat, 1); break;
-    case 402: HTTP_SUM_TRANS_STAT(http_response_status_402_count_stat, 1); break;
-    case 403: HTTP_SUM_TRANS_STAT(http_response_status_403_count_stat, 1); break;
-    case 404: HTTP_SUM_TRANS_STAT(http_response_status_404_count_stat, 1); break;
-    case 405: HTTP_SUM_TRANS_STAT(http_response_status_405_count_stat, 1); break;
-    case 406: HTTP_SUM_TRANS_STAT(http_response_status_406_count_stat, 1); break;
-    case 407: HTTP_SUM_TRANS_STAT(http_response_status_407_count_stat, 1); break;
-    case 408: HTTP_SUM_TRANS_STAT(http_response_status_408_count_stat, 1); break;
-    case 409: HTTP_SUM_TRANS_STAT(http_response_status_409_count_stat, 1); break;
-    case 410: HTTP_SUM_TRANS_STAT(http_response_status_410_count_stat, 1); break;
-    case 411: HTTP_SUM_TRANS_STAT(http_response_status_411_count_stat, 1); break;
-    case 412: HTTP_SUM_TRANS_STAT(http_response_status_412_count_stat, 1); break;
-    case 413: HTTP_SUM_TRANS_STAT(http_response_status_413_count_stat, 1); break;
-    case 414: HTTP_SUM_TRANS_STAT(http_response_status_414_count_stat, 1); break;
-    case 415: HTTP_SUM_TRANS_STAT(http_response_status_415_count_stat, 1); break;
-    case 416: HTTP_SUM_TRANS_STAT(http_response_status_416_count_stat, 1); break;
-    case 500: HTTP_SUM_TRANS_STAT(http_response_status_500_count_stat, 1); break;
-    case 501: HTTP_SUM_TRANS_STAT(http_response_status_501_count_stat, 1); break;
-    case 502: HTTP_SUM_TRANS_STAT(http_response_status_502_count_stat, 1); break;
-    case 503: HTTP_SUM_TRANS_STAT(http_response_status_503_count_stat, 1); break;
-    case 504: HTTP_SUM_TRANS_STAT(http_response_status_504_count_stat, 1); break;
-    case 505: HTTP_SUM_TRANS_STAT(http_response_status_505_count_stat, 1); break;
+    case 100: HTTP_INCREMENT_TRANS_STAT(http_response_status_100_count_stat); break;
+    case 101: HTTP_INCREMENT_TRANS_STAT(http_response_status_101_count_stat); break;
+    case 200: HTTP_INCREMENT_TRANS_STAT(http_response_status_200_count_stat); break;
+    case 201: HTTP_INCREMENT_TRANS_STAT(http_response_status_201_count_stat); break;
+    case 202: HTTP_INCREMENT_TRANS_STAT(http_response_status_202_count_stat); break;
+    case 203: HTTP_INCREMENT_TRANS_STAT(http_response_status_203_count_stat); break;
+    case 204: HTTP_INCREMENT_TRANS_STAT(http_response_status_204_count_stat); break;
+    case 205: HTTP_INCREMENT_TRANS_STAT(http_response_status_205_count_stat); break;
+    case 206: HTTP_INCREMENT_TRANS_STAT(http_response_status_206_count_stat); break;
+    case 300: HTTP_INCREMENT_TRANS_STAT(http_response_status_300_count_stat); break;
+    case 301: HTTP_INCREMENT_TRANS_STAT(http_response_status_301_count_stat); break;
+    case 302: HTTP_INCREMENT_TRANS_STAT(http_response_status_302_count_stat); break;
+    case 303: HTTP_INCREMENT_TRANS_STAT(http_response_status_303_count_stat); break;
+    case 304: HTTP_INCREMENT_TRANS_STAT(http_response_status_304_count_stat); break;
+    case 305: HTTP_INCREMENT_TRANS_STAT(http_response_status_305_count_stat); break;
+    case 307: HTTP_INCREMENT_TRANS_STAT(http_response_status_307_count_stat); break;
+    case 400: HTTP_INCREMENT_TRANS_STAT(http_response_status_400_count_stat); break;
+    case 401: HTTP_INCREMENT_TRANS_STAT(http_response_status_401_count_stat); break;
+    case 402: HTTP_INCREMENT_TRANS_STAT(http_response_status_402_count_stat); break;
+    case 403: HTTP_INCREMENT_TRANS_STAT(http_response_status_403_count_stat); break;
+    case 404: HTTP_INCREMENT_TRANS_STAT(http_response_status_404_count_stat); break;
+    case 405: HTTP_INCREMENT_TRANS_STAT(http_response_status_405_count_stat); break;
+    case 406: HTTP_INCREMENT_TRANS_STAT(http_response_status_406_count_stat); break;
+    case 407: HTTP_INCREMENT_TRANS_STAT(http_response_status_407_count_stat); break;
+    case 408: HTTP_INCREMENT_TRANS_STAT(http_response_status_408_count_stat); break;
+    case 409: HTTP_INCREMENT_TRANS_STAT(http_response_status_409_count_stat); break;
+    case 410: HTTP_INCREMENT_TRANS_STAT(http_response_status_410_count_stat); break;
+    case 411: HTTP_INCREMENT_TRANS_STAT(http_response_status_411_count_stat); break;
+    case 412: HTTP_INCREMENT_TRANS_STAT(http_response_status_412_count_stat); break;
+    case 413: HTTP_INCREMENT_TRANS_STAT(http_response_status_413_count_stat); break;
+    case 414: HTTP_INCREMENT_TRANS_STAT(http_response_status_414_count_stat); break;
+    case 415: HTTP_INCREMENT_TRANS_STAT(http_response_status_415_count_stat); break;
+    case 416: HTTP_INCREMENT_TRANS_STAT(http_response_status_416_count_stat); break;
+    case 500: HTTP_INCREMENT_TRANS_STAT(http_response_status_500_count_stat); break;
+    case 501: HTTP_INCREMENT_TRANS_STAT(http_response_status_501_count_stat); break;
+    case 502: HTTP_INCREMENT_TRANS_STAT(http_response_status_502_count_stat); break;
+    case 503: HTTP_INCREMENT_TRANS_STAT(http_response_status_503_count_stat); break;
+    case 504: HTTP_INCREMENT_TRANS_STAT(http_response_status_504_count_stat); break;
+    case 505: HTTP_INCREMENT_TRANS_STAT(http_response_status_505_count_stat); break;
     default: break;
     }
     switch(status_code / 100) {
-    case 1: HTTP_SUM_TRANS_STAT(http_response_status_1xx_count_stat, 1); break;
-    case 2: HTTP_SUM_TRANS_STAT(http_response_status_2xx_count_stat, 1); break;
-    case 3: HTTP_SUM_TRANS_STAT(http_response_status_3xx_count_stat, 1); break;
-    case 4: HTTP_SUM_TRANS_STAT(http_response_status_4xx_count_stat, 1); break;
-    case 5: HTTP_SUM_TRANS_STAT(http_response_status_5xx_count_stat, 1); break;
+    case 1: HTTP_INCREMENT_TRANS_STAT(http_response_status_1xx_count_stat); break;
+    case 2: HTTP_INCREMENT_TRANS_STAT(http_response_status_2xx_count_stat); break;
+    case 3: HTTP_INCREMENT_TRANS_STAT(http_response_status_3xx_count_stat); break;
+    case 4: HTTP_INCREMENT_TRANS_STAT(http_response_status_4xx_count_stat); break;
+    case 5: HTTP_INCREMENT_TRANS_STAT(http_response_status_5xx_count_stat); break;
     default: break;
     }
   }
   
   // Increment the completed connection count
-  HTTP_SUM_TRANS_STAT(http_completed_requests_stat, 1);
+  HTTP_INCREMENT_TRANS_STAT(http_completed_requests_stat);
 
   // Set the stat now that we know what happend
   ink_hrtime total_msec = ink_hrtime_to_msec(total_time);

@@ -345,9 +345,6 @@ bool
 CacheVC::get_data(int i, void *data)
 {
   switch (i) {
-  case CACHE_DATA_SIZE:
-    *((int *) data) = doc_len;
-    return true;
 #ifdef HTTP_CACHE
   case CACHE_DATA_HTTP_INFO:
     *((CacheHTTPInfo **) data) = &alternate;
@@ -721,10 +718,10 @@ CacheProcessor::cacheInitialized()
   int cache_init_ok = 0;
   /* allocate ram size in proportion to the disk space the
      volume accupies */
-  int64_t total_size = 0;
-  uint64_t total_cache_bytes = 0;
-  uint64_t total_direntries = 0;
-  uint64_t used_direntries = 0;
+  int64_t total_size = 0;               // count in HTTP & MIXT
+  uint64_t total_cache_bytes = 0;       // bytes that can used in total_size
+  uint64_t total_direntries = 0;        // all the direntries in the cache
+  uint64_t used_direntries = 0;         //   and used
   uint64_t vol_total_cache_bytes = 0;
   uint64_t vol_total_direntries = 0;
   uint64_t vol_used_direntries = 0;
@@ -770,6 +767,7 @@ CacheProcessor::cacheInitialized()
           (unsigned int) caches_ready, gnvol);
     int64_t ram_cache_bytes = 0;
     if (gnvol) {
+      // new ram_caches, with algorithm from the config
       for (i = 0; i < gnvol; i++) {
         switch (cache_config_ram_cache_algorithm) {
           default:
@@ -781,6 +779,7 @@ CacheProcessor::cacheInitialized()
             break;
         }
       }
+      // let us cocalate the Size
       if (cache_config_ram_cache_size == AUTO_SIZE_RAM_CACHE) {
         Debug("cache_init", "CacheProcessor::cacheInitialized - cache_config_ram_cache_size == AUTO_SIZE_RAM_CACHE");
         for (i = 0; i < gnvol; i++) {
@@ -789,12 +788,8 @@ CacheProcessor::cacheInitialized()
           ram_cache_bytes += vol_dirlen(gvol[i]);
           Debug("cache_init", "CacheProcessor::cacheInitialized - ram_cache_bytes = %" PRId64 " = %" PRId64 "Mb",
                 ram_cache_bytes, ram_cache_bytes / (1024 * 1024));
-          /*
-             CACHE_VOL_SUM_DYN_STAT(cache_ram_cache_bytes_total_stat,
-             (int64_t)vol_dirlen(gvol[i]));
-           */
-          RecSetGlobalRawStatSum(vol->cache_vol->vol_rsb,
-                                 cache_ram_cache_bytes_total_stat, (int64_t) vol_dirlen(gvol[i]));
+          CACHE_VOL_SUM_DYN_STAT(cache_ram_cache_bytes_total_stat, (int64_t) vol_dirlen(gvol[i]));
+
           vol_total_cache_bytes = gvol[i]->len - vol_dirlen(gvol[i]);
           total_cache_bytes += vol_total_cache_bytes;
           Debug("cache_init", "CacheProcessor::cacheInitialized - total_cache_bytes = %" PRId64 " = %" PRId64 "Mb",
@@ -814,6 +809,9 @@ CacheProcessor::cacheInitialized()
         }
 
       } else {
+        // we got configured memory size
+        // TODO, should we check the available system memories, or you will
+        //   OOM or swapout, that is not a good situation for the server
         Debug("cache_init", "CacheProcessor::cacheInitialized - %" PRId64 " != AUTO_SIZE_RAM_CACHE",
               cache_config_ram_cache_size);
         int64_t http_ram_cache_size =
@@ -1656,10 +1654,9 @@ build_vol_hash_table(CacheHostRecord *cp)
 
 void
 Cache::vol_initialized(bool result) {
-  ink_atomic_increment(&total_initialized_vol, 1);
   if (result)
     ink_atomic_increment(&total_good_nvol, 1);
-  if (total_nvol == total_initialized_vol)
+  if (total_nvol == ink_atomic_increment(&total_initialized_vol, 1) + 1)
     open_done();
 }
 
@@ -1777,7 +1774,7 @@ int
 Cache::open(bool clear, bool fix) {
   NOWARN_UNUSED(fix);
   int i;
-  off_t blocks;
+  off_t blocks = 0;
   cache_read_done = 0;
   total_initialized_vol = 0;
   total_nvol = 0;
@@ -2594,14 +2591,11 @@ static void reg_int(const char *str, int stat, RecRawStatBlock *rsb, const char 
 void
 register_cache_stats(RecRawStatBlock *rsb, const char *prefix)
 {
-  char stat_str[256];
-
   // Special case for this sucker, since it uses its own aggregator.
   reg_int("bytes_used", cache_bytes_used_stat, rsb, prefix, cache_stats_bytes_used_cb);
 
   REG_INT("bytes_total", cache_bytes_total_stat);
-  snprintf(stat_str, sizeof(stat_str), "%s.%s", prefix, "ram_cache.total_bytes");
-  RecRegisterRawStat(rsb, RECT_PROCESS, stat_str, RECD_INT, RECP_NULL, (int) cache_ram_cache_bytes_total_stat, RecRawStatSyncSum);
+  REG_INT("ram_cache.total_bytes", cache_ram_cache_bytes_total_stat);
   REG_INT("ram_cache.bytes_used", cache_ram_cache_bytes_stat);
   REG_INT("ram_cache.hits", cache_ram_cache_hits_stat);
   REG_INT("ram_cache.misses", cache_ram_cache_misses_stat);

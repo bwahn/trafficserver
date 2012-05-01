@@ -705,7 +705,7 @@ CacheVC::openReadMain(int event, Event * e)
     return EVENT_CONT;
   }
 Lread: {
-    if ((uint32_t)vio.ndone >= doc_len)
+    if (vio.ndone >= (int64_t)doc_len)
       // reached the end of the document and the user still wants more
       return calluser(VC_EVENT_EOS);
     last_collision = 0;

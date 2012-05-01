@@ -1,5 +1,47 @@
                                                          -*- coding: utf-8 -*-
 Changes with Apache Traffic Server 3.1.4
+  *) [TS-1163] Support for raw disks larger than 2TB on Linux
+
+  *) [TS-1230] added a paramter to the configure script to allow overriding
+   the calculated ARG_MAX value
+
+  *) [TS-1208] enable check_memory() in traffic_cop for Linux
+
+  *) [TS-1217] cop cleanup, remove unused variables & defines
+
+  *) [TS-1209] Allow for background fill even when a transform plugin is
+   the producer. Author: Robert Logue.
+
+  *) [TS-1229] clean up RecordsCofing.cc, remove unused entries.
+
+  *) [TS-1142] record ram hit in stats.
+
+  *) [TS-1213] update will crash at HttpTransact::process_quick_http_filter.
+
+  *) [TS-1186] Fixed Perl stats API to work with 64-bit stat values
+
+  *) [TS-1227] header_filter "set" operator doesn't work if the header
+   doesn't already exist.
+
+  *) [TS-1210] remove 3.0.x deprecated APIs
+
+  *) [TS-1225] Remove 32 bit doc_len instances.
+
+  *) [TS-1226] Make header_filter support e.g. '=' characters in header
+   values.
+
+  *) [TS-1150] Some performance improvements around the heap guard.
+
+  *) [TS-1216] Remove the initializer for some gcc`s limits.
+
+  *) [TS-1205] double free when RecDataSet in cluster mode
+
+  *) [TS-1220] stats: cleanup and fix the wrong values.
+
+  *) [TS-1212] can not limit ram cache, also fix the stats.
+
+  *) [TS-1214] another race condition in cache init.
+
   *) [TS-1130] Wrong CAS operation on ink_time_t on 64 bit system.
 
   *) [TS-1127] Wrong returned value of incoming port address. This
