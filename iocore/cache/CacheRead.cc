@@ -559,6 +559,8 @@ CacheVC::openReadReadDone(int event, Event * e)
         dir_valid(vol, &dir))    // object still valid
     {
       doc = (Doc *) buf->data();
+      char xt[33];
+      Note("Read2 fragment %s len=%d/%"PRId64"/%"PRId64" %d/%d frags", doc->key.toHexStr(xt), doc->len, doc->total_len, doc_len, fragment, doc->nfrags());
       if (doc->magic != DOC_MAGIC) {
         char tmpstring[100];
         if (doc->magic == DOC_CORRUPT)
@@ -649,8 +651,8 @@ CacheVC::openReadMain(int event, Event * e)
       }
       if (target != fragment) {
         char first_key_str[33], current_key_str[33], target_key_str[33];
-        first_doc->first_key.toStr(first_key_str);
-        key.toStr(current_key_str);
+        first_doc->first_key.toHexStr(first_key_str);
+        key.toHexStr(current_key_str);
         // We search down because offset is the start of the fragment.
         while ( target > 0 && seek_to < frags[target].offset )
           --target;
@@ -667,7 +669,7 @@ CacheVC::openReadMain(int event, Event * e)
           prev_CacheKey(&key, &key);
           --fragment;
         }
-        key.toStr(target_key_str);
+        key.toHexStr(target_key_str);
         Note("Seek %s -> %s in %s", current_key_str, target_key_str, first_key_str);
         goto Lread;
       }

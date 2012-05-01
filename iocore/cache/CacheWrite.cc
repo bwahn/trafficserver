@@ -786,6 +786,8 @@ agg_copy(char *p, CacheVC *vc)
     }
     if (doc->flen)
       memcpy(doc->frags(), &vc->frag[0], doc->flen);
+    if (doc->flen)
+      Note("Writing doc with frag table");
 
 #ifdef HTTP_CACHE
     if (vc->f.rewrite_resident_alt) {
