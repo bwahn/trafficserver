@@ -2714,7 +2714,7 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
           s->next_action = PROXY_INTERNAL_CACHE_NOOP;
           break;
         } else if (s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED) {
-          // we switch to tunneing for Range requests either
+          // we switch to tunneling for Range requests either
           // 1. we need to revalidate or
           // 2. out-of-order Range requests
           DebugTxn("http_seq", "[HttpTransact::HandleCacheOpenReadHit] Out-oforder Range request - tunneling");
@@ -6087,7 +6087,7 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
   int req_method = request->method_get_wksidx();
   if (!(HttpTransactHeaders::is_method_cacheable(req_method)) && s->api_req_cacheable == false) {
     DebugTxn("http_trans", "[is_response_cacheable] " "only GET, and some HEAD and POST are cachable");
-    return (false);
+    return false;
   }
   // DebugTxn("http_trans", "[is_response_cacheable] method is cacheable");
   // If the request was not looked up in the cache, the response
@@ -6099,7 +6099,7 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
   }
   // already has a fresh copy in the cache
   if (s->range_setup == RANGE_NOT_HANDLED)
-    return (false);
+    return false;
 
   // Check whether the response is cachable based on its cookie
   // If there are cookies in response but a ttl is set, allow caching
@@ -6123,7 +6123,7 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
   }
   // DebugTxn("http_trans", "[is_response_cacheable] server permits storing");
 
-  // does config explicitly forbit storing?
+  // does config explicitly forbid storing?
   // ttl overides other config parameters
   if ((!s->cache_info.directives.does_config_permit_storing &&
        !s->cache_control.ignore_server_no_cache &&
@@ -6134,7 +6134,7 @@ HttpTransact::is_response_cacheable(State* s, HTTPHdr* request, HTTPHdr* respons
   }
   // DebugTxn("http_trans", "[is_response_cacheable] config permits storing");
 
-  // does client explicitly forbit storing?
+  // does client explicitly forbid storing?
   if (!s->cache_info.directives.does_client_permit_storing && !s->cache_control.ignore_client_no_cache) {
     DebugTxn("http_trans", "[is_response_cacheable] client does not permit storing, "
           "and cache control does not say to ignore client no-cache");
