@@ -2735,7 +2735,7 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
           // we switch to tunneling for Range requests if it is out of order.
           // In that case we fetch the entire source so it's OK to switch
           // this late.
-          DebugTxn("http_seq", "[HttpTransact::HandleCacheOpenReadHit] Out-oforder Range request - tunneling");
+          DebugTxn("http_seq", "[HttpTransact::HandleCacheOpenReadHit] Out-of-order Range request - tunneling");
           s->cache_info.action = CACHE_DO_NO_ACTION;
           if (s->force_dns) {
             HandleCacheOpenReadMiss(s); // DNS is already completed no need of doing DNS

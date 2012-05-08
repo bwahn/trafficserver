@@ -440,7 +440,6 @@ CacheVC::openReadFromWriter(int event, Event * e)
     MUTEX_RELEASE(writer_lock);
     // either a header + body update or a new document
     SET_HANDLER(&CacheVC::openReadStartEarliest);
-    Note("Cache start earliest - openReadFromWriter");
     return openReadStartEarliest(event, e);
   }
   writer_buf = write_vc->blocks;
@@ -559,8 +558,6 @@ CacheVC::openReadReadDone(int event, Event * e)
         dir_valid(vol, &dir))    // object still valid
     {
       doc = (Doc *) buf->data();
-      char xt[33];
-      Note("Read2 fragment %s len=%d/%"PRId64"/%"PRId64" %d/%d frags", doc->key.toHexStr(xt), doc->len, doc->total_len, doc_len, fragment, doc->nfrags());
       if (doc->magic != DOC_MAGIC) {
         char tmpstring[100];
         if (doc->magic == DOC_CORRUPT)
@@ -650,13 +647,10 @@ CacheVC::openReadMain(int event, Event * e)
         target = lfi; // should terminate before target == fragment
       }
       if (target != fragment) {
-        char first_key_str[33], current_key_str[33], target_key_str[33];
-        first_doc->first_key.toHexStr(first_key_str);
-        key.toHexStr(current_key_str);
+        int cfi = fragment; // current fragment index
         // We search down because offset is the start of the fragment.
         while ( target > 0 && seek_to < frags[target].offset )
           --target;
-        Note("Seek %d:%"PRId64" -> %d:%"PRId64, fragment, doc_pos, target, seek_to);
         // fragment is the current fragment
         // key is the next key (fragment + 1)
         ink_debug_assert(target != fragment);
@@ -669,8 +663,12 @@ CacheVC::openReadMain(int event, Event * e)
           prev_CacheKey(&key, &key);
           --fragment;
         }
-        key.toHexStr(target_key_str);
-        Note("Seek %s -> %s in %s", current_key_str, target_key_str, first_key_str);
+
+        if (is_debug_tag_set("cache_seek")) {
+          char target_key_str[33];
+          key.toHexStr(target_key_str);
+          Debug("cache_seek", "Seek %d:%"PRId64" -> %d:%"PRId64":%s", cfi, doc_pos, target, seek_to, target_key_str);
+        }
         goto Lread;
       }
     }
@@ -775,7 +773,6 @@ CacheVC::openReadStartEarliest(int event, Event * e)
   set_io_not_in_progress();
   if (_action.cancelled)
     return free_CacheVC(this);
-  Note("openReadStartEarliest");
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock)
@@ -979,7 +976,6 @@ CacheVC::openReadStartHead(int event, Event * e)
   set_io_not_in_progress();
   if (_action.cancelled)
     return free_CacheVC(this);
-  Note("openReadStartHead");
   {
     CACHE_TRY_LOCK(lock, vol->mutex, mutex->thread_holding);
     if (!lock)
@@ -1142,7 +1138,6 @@ Learliest:
   buf = NULL;
   earliest_key = key;
   last_collision = NULL;
-  Note("Cache Start Earliest from openReadStartHead");
   SET_HANDLER(&CacheVC::openReadStartEarliest);
   return openReadStartEarliest(event, e);
 }

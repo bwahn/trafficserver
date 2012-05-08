@@ -180,13 +180,26 @@ CacheVC::handleWrite(int event, Event *e)
   // plain write case
   ink_assert(!trigger);
   frag_len = 0;
-  if (f.use_first_key) {
-    if (fragment) // Cache fill that took more than 1 fragment
+  if (f.use_first_key) { // Writing the header fragment.
+    if (fragment) // Multi-fragment from cache fill.
       frag_len = (fragment-1) * sizeof(Frag);
-    else if (!frag && first_buf) {  // Update of multi-fragment object
-      frag_len = reinterpret_cast<Doc*>(first_buf->data())->flen;
-      Note("cache update - pulling frag table %d from first_buf",
-           reinterpret_cast<Doc*>(first_buf->data())->nfrags());
+    else if (!frag && first_buf) {
+      /* Check for update of multi-fragment document. We detect that
+         when the first_buf has a fragment table but the VC doesn't.
+         It's unsafe to set the VC frag table to point directly so we
+         allocate space here and do another check in @c agg_copy to
+         move it. We must preserve the data or cache seek will fail
+         in the future for this object.
+      */
+      Doc* old_header = reinterpret_cast<Doc*>(first_buf->data());
+      if (old_header->flen) { // There's a fragment table to preserve.
+        frag_len = old_header->flen;
+        if (is_debug_tag_set("cache_update")) {
+          char x[33];
+          Debug("cache_update", "Preserving %d fragment table for %s",
+                old_header->nfrags(), first_key.toHexStr(x));
+        }
+      }
     }
   }
 /*
@@ -797,17 +810,17 @@ agg_copy(char *p, CacheVC *vc)
       dir_set_head(&vc->dir, !vc->fragment);
     }
     if (doc->flen) {
+      // There's a fragment table to write.
       // If this was a cache fill, the frag table is internal.
-      // If it's just a header update (e.g. 304 NOT MODIFIED) then the
-      // frag table is in the first_buf.
-      Note("Writing doc with frag table");
+      // If it's a header update (e.g. 304 NOT MODIFIED return on
+      // stale object) then the frag table is in the first_buf.
       if (vc->frag) {
         memcpy(doc->frags(), &vc->frag[0], doc->flen);
       } else if (vc->first_buf) {
-        Note("Copying frag table from first_buf");
+        ink_debug_assert(reinterpret_cast<Doc*>(vc->first_buf->data())->flen == doc->flen);
         memcpy(doc->frags(), reinterpret_cast<Doc*>(vc->first_buf->data())->frags(), doc->flen);
       } else {
-        ink_assert(! "Multi-fragment update without frag table");
+        ink_assert(! "Multi-fragment header write but can't find fragment table");
       }
     }
 
