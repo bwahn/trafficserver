@@ -179,10 +179,22 @@ CacheVC::handleWrite(int event, Event *e)
 
   // plain write case
   ink_assert(!trigger);
+  frag_len = 0;
+  if (f.use_first_key) {
+    if (fragment) // Cache fill that took more than 1 fragment
+      frag_len = (fragment-1) * sizeof(Frag);
+    else if (!frag && first_buf) {  // Update of multi-fragment object
+      frag_len = reinterpret_cast<Doc*>(first_buf->data())->flen;
+      Note("cache update - pulling frag table %d from first_buf",
+           reinterpret_cast<Doc*>(first_buf->data())->nfrags());
+    }
+  }
+/*
   if (f.use_first_key && fragment) {
     frag_len = (fragment-1) * sizeof(Frag);
   } else
     frag_len = 0;
+*/
   set_agg_write_in_progress();
   POP_HANDLER;
   agg_len = vol->round_to_approx_size(write_len + header_len + frag_len + sizeofDoc);
@@ -784,10 +796,20 @@ agg_copy(char *p, CacheVC *vc)
       doc->key = vc->key;
       dir_set_head(&vc->dir, !vc->fragment);
     }
-    if (doc->flen)
-      memcpy(doc->frags(), &vc->frag[0], doc->flen);
-    if (doc->flen)
+    if (doc->flen) {
+      // If this was a cache fill, the frag table is internal.
+      // If it's just a header update (e.g. 304 NOT MODIFIED) then the
+      // frag table is in the first_buf.
       Note("Writing doc with frag table");
+      if (vc->frag) {
+        memcpy(doc->frags(), &vc->frag[0], doc->flen);
+      } else if (vc->first_buf) {
+        Note("Copying frag table from first_buf");
+        memcpy(doc->frags(), reinterpret_cast<Doc*>(vc->first_buf->data())->frags(), doc->flen);
+      } else {
+        ink_assert(! "Multi-fragment update without frag table");
+      }
+    }
 
 #ifdef HTTP_CACHE
     if (vc->f.rewrite_resident_alt) {
@@ -1509,7 +1531,7 @@ CacheVC::openWriteStartDone(int event, Event *e)
       }
 
       /* INKqa07123.
-         A directory entry which is nolonger valid may have been overwritten.
+         A directory entry which is no longer valid may have been overwritten.
          We need to start afresh from the beginning by setting last_collision
          to NULL.
        */

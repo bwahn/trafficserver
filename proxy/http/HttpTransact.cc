@@ -2449,7 +2449,8 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
   }
 
   ink_assert(s->cache_lookup_result == CACHE_LOOKUP_HIT_FRESH ||
-             s->cache_lookup_result == CACHE_LOOKUP_HIT_WARNING || s->cache_lookup_result == CACHE_LOOKUP_HIT_STALE);
+             s->cache_lookup_result == CACHE_LOOKUP_HIT_WARNING ||
+             s->cache_lookup_result == CACHE_LOOKUP_HIT_STALE);
   if (s->cache_lookup_result == CACHE_LOOKUP_HIT_STALE &&
       s->api_update_cached_object != HttpTransact::UPDATE_CACHED_OBJECT_CONTINUE) {
     needs_revalidate = true;
@@ -2482,9 +2483,6 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
     SET_VIA_STRING(VIA_DETAIL_CACHE_LOOKUP, VIA_DETAIL_MISS_EXPIRED);
     s->www_auth_content = send_revalidate ? CACHE_AUTH_STALE : CACHE_AUTH_FRESH;
     send_revalidate = true;
-  }
-  if (send_revalidate && s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
-    s->range_setup = RANGE_REVALIDATE;
   }
 
   DebugTxn("http_trans", "CacheOpenRead --- needs_auth          = %d", needs_authenticate);
@@ -2566,9 +2564,29 @@ HttpTransact::HandleCacheOpenReadHit(State* s)
           return;
         }
       }
+
       build_request(s, &s->hdr_info.client_request, &s->hdr_info.server_request, s->current.server->http_version);
 
-      issue_revalidate(s);
+      /* We can't handle revalidate requests with ranges. If it comes
+         back unmodified that's fine but if not the OS will either
+         provide the entire object which is difficult to handle and
+         potentially very inefficient, or we'll get back just the
+         range and we can't cache that anyway. So just forward the
+         request.
+
+         Note: We're here only if the cache is stale so we don't want
+         to serve it.
+      */
+      if (s->hdr_info.client_request.presence(MIME_PRESENCE_RANGE)) {
+        Debug("http_trans", "[CacheOpenReadHit] Forwarding range request for stale cache object.");
+        s->cache_info.action = CACHE_DO_NO_ACTION;
+        s->cache_info.object_read = NULL;
+      } else {
+        // If it's not a range tweak the request to be a revalidate.
+        // Note this doesn't actually issue the request, it simply
+        // adjusts the headers for later.
+        issue_revalidate(s);
+      }
 
       // this can not be anything but a simple origin server connection.
       // in other words, we would not have looked up the cache for a
@@ -2713,10 +2731,10 @@ HttpTransact::build_response_from_cache(State* s, HTTPWarningCode warning_code)
           s->cache_info.action = CACHE_DO_NO_ACTION;
           s->next_action = PROXY_INTERNAL_CACHE_NOOP;
           break;
-        } else if (s->range_setup == RANGE_NOT_SATISFIABLE || s->range_setup == RANGE_NOT_HANDLED) {
-          // we switch to tunneling for Range requests either
-          // 1. we need to revalidate or
-          // 2. out-of-order Range requests
+        } else if (s->range_setup == RANGE_NOT_HANDLED) {
+          // we switch to tunneling for Range requests if it is out of order.
+          // In that case we fetch the entire source so it's OK to switch
+          // this late.
           DebugTxn("http_seq", "[HttpTransact::HandleCacheOpenReadHit] Out-oforder Range request - tunneling");
           s->cache_info.action = CACHE_DO_NO_ACTION;
           if (s->force_dns) {
@@ -4530,6 +4548,11 @@ HttpTransact::handle_no_cache_operation_on_forward_server_response(State* s)
       s->next_action = how_to_open_connection(s);
     }
     return;
+  case HTTP_STATUS_PARTIAL_CONTENT:
+    // If we get this back we should be just passing it through.
+    ink_debug_assert(s->cache_info.action == CACHE_DO_NO_ACTION);
+    s->next_action = SERVER_READ;
+    break;
   default:
     DebugTxn("http_trans", "[hncoofsr] server sent back something other than 100,304,200");
     /* Default behavior is to pass-through response to the client */
