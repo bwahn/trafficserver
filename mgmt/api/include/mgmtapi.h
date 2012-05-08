@@ -33,7 +33,7 @@
 #ifndef __TS_MGMT_API_H__
 #define __TS_MGMT_API_H__
 
-#include "ink_port.h"
+#include <stdint.h>
 
 /***************************************************************************
  * System Specific Items
