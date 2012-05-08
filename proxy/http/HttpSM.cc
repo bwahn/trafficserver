@@ -3038,7 +3038,7 @@ HttpSM::tunnel_handler_ua(int event, HttpTunnelConsumer * c)
   //
   HttpTransact::Source_t original_source = t_state.source;
   if (HttpTransact::SOURCE_TRANSFORM == original_source &&
-      t_state.range_setup == HttpTransact::RANGE_TRANSFORM) {
+      t_state.range_setup != HttpTransact::RANGE_NONE) {
     original_source = t_state.pre_transform_source;
   }
 
@@ -3585,7 +3585,7 @@ HttpSM::tunnel_handler_transform_write(int event, HttpTunnelConsumer * c)
   // all other transforms are plugin driven and the difference between
   // source data and final data should represent the transformation delta
   //
-  if (t_state.range_setup != HttpTransact::RANGE_TRANSFORM) {
+  if (t_state.range_setup == HttpTransact::RANGE_NONE) {
     switch (t_state.pre_transform_source) {
     case HttpTransact::SOURCE_HTTP_ORIGIN_SERVER:
       server_response_body_bytes = client_response_body_bytes;
