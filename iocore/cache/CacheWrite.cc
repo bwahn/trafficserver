@@ -201,13 +201,15 @@ CacheVC::handleWrite(int event, Event *e)
         frag = integral_frags;
         frag[0].offset = 0;
         frag_len = sizeof(Frag);
-        Note("Writing out single fragment document as multi-frag.");
+        Debug("cache_update", "Writing out single fragment document as multi-frag.");
       } else {
-        Note("Writing out first key no fragment table now=%s then=%s %d/%"PRId64
-             , f.single_fragment ? "single" : "multi"
-             , old_header->single_fragment() ? "single" : "multi"
-             , old_header->len, old_header->total_len
-          );
+        if (is_debug_tag_set("cache_update"))
+          Debug("cache_update",
+                "Writing first key no fragment table now=%s then=%s %d/%"PRId64
+               , f.single_fragment ? "single" : "multi"
+               , old_header->single_fragment() ? "single" : "multi"
+               , old_header->len, old_header->total_len
+            );
       }
     }
   }

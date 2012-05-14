@@ -1076,11 +1076,14 @@ CacheVC::openReadStartHead(int event, Event * e)
       doc_pos = doc->prefix_len();
       doc_len = doc->total_len;
     }
-    char xt[33],yt[33]; // amc debug
-    Note("CacheReadStartHead - read %s target %s - %s %d of %"PRId64" bytes, %d fragments",
-         doc->key.toHexStr(xt), key.toHexStr(yt),
-         f.single_fragment ? "single" : "multi",
-         doc->len, doc->total_len, doc->nfrags());
+
+    if (is_debug_tag_set("cache_read")) { // amc debug
+      char xt[33],yt[33];
+      Debug("cache_rad", "CacheReadStartHead - read %s target %s - %s %d of %"PRId64" bytes, %d fragments",
+            doc->key.toHexStr(xt), key.toHexStr(yt),
+            f.single_fragment ? "single" : "multi",
+            doc->len, doc->total_len, doc->nfrags());
+    }
     // the first fragment might have been gc'ed. Make sure the first
     // fragment is there before returning CACHE_EVENT_OPEN_READ
     if (!f.single_fragment)
