@@ -181,33 +181,37 @@ CacheVC::handleWrite(int event, Event *e)
   ink_assert(!trigger);
   frag_len = 0;
   if (f.use_first_key) { // Writing the header fragment.
-    if (fragment) // Multi-fragment from cache fill.
+    if (fragment) { // Multi-fragment from cache fill.
       frag_len = (fragment-1) * sizeof(Frag);
-    else if (!frag && first_buf) {
-      /* Check for update of multi-fragment document. We detect that
-         when the first_buf has a fragment table but the VC doesn't.
-         It's unsafe to set the VC frag table to point directly so we
-         allocate space here and do another check in @c agg_copy to
-         move it. We must preserve the data or cache seek will fail
-         in the future for this object.
-      */
+    } else if (first_buf) {
       Doc* old_header = reinterpret_cast<Doc*>(first_buf->data());
-      if (old_header->flen) { // There's a fragment table to preserve.
+      if (!frag && old_header->flen && !f.single_fragment) {
+        // There's a fragment table we need to preserve.
         frag_len = old_header->flen;
         if (is_debug_tag_set("cache_update")) {
           char x[33];
-          Debug("cache_update", "Preserving %d fragment table for %s",
-                old_header->nfrags(), first_key.toHexStr(x));
+          Debug("cache_update", "Preserving fragment table (%d in %d bytes) for %s",
+                old_header->nfrags(), frag_len, first_key.toHexStr(x));
         }
+      } else if (!f.single_fragment && old_header->single_fragment()) {
+        // Conversion from single fragment to multi-fragment. This can only
+        // happen if the object fits in a fragment so a table with only
+        // one entry is fine. It makes other logic simpler to have all multi
+        // fragment objects contain a fragment table.
+        frag = integral_frags;
+        frag[0].offset = 0;
+        frag_len = sizeof(Frag);
+        Note("Writing out single fragment document as multi-frag.");
+      } else {
+        Note("Writing out first key no fragment table now=%s then=%s %d/%"PRId64
+             , f.single_fragment ? "single" : "multi"
+             , old_header->single_fragment() ? "single" : "multi"
+             , old_header->len, old_header->total_len
+          );
       }
     }
   }
-/*
-  if (f.use_first_key && fragment) {
-    frag_len = (fragment-1) * sizeof(Frag);
-  } else
-    frag_len = 0;
-*/
+
   set_agg_write_in_progress();
   POP_HANDLER;
   agg_len = vol->round_to_approx_size(write_len + header_len + frag_len + sizeofDoc);
@@ -814,14 +818,7 @@ agg_copy(char *p, CacheVC *vc)
       // If this was a cache fill, the frag table is internal.
       // If it's a header update (e.g. 304 NOT MODIFIED return on
       // stale object) then the frag table is in the first_buf.
-      if (vc->frag) {
-        memcpy(doc->frags(), &vc->frag[0], doc->flen);
-      } else if (vc->first_buf) {
-        ink_debug_assert(reinterpret_cast<Doc*>(vc->first_buf->data())->flen == doc->flen);
-        memcpy(doc->frags(), reinterpret_cast<Doc*>(vc->first_buf->data())->frags(), doc->flen);
-      } else {
-        ink_assert(! "Multi-fragment header write but can't find fragment table");
-      }
+      memcpy(doc->frags(), vc->get_frag_table(), doc->flen);
     }
 
 #ifdef HTTP_CACHE

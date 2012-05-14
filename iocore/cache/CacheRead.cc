@@ -630,11 +630,16 @@ CacheVC::openReadMain(int event, Event * e)
     }
     Doc *first_doc = (Doc*)first_buf->data();
     Frag *frags = first_doc->frags();
+    if (is_debug_tag_set("cache_seek")) {
+      char b[33];
+      Debug("cache_seek", "Seek %"PRId64" in %s at %"PRId64" of %d",
+            seek_to, first_key.toHexStr(b), doc_pos, doc->len);
+    }
     if (!f.single_fragment) {
       // Last Fragment Index
       int lfi = static_cast<int>(first_doc->nfrags()) - 1;
       int target = fragment; // index of target fragment.
-      ink_debug_assert(lfi > 0); // because it's not a single frag doc.
+      ink_debug_assert(lfi >= 0); // because it's not a single frag doc.
 
       // 3 cases - seek earlier fragment, seek later fragment,
       // or seek target is in the current fragment. We only schedule a read
@@ -1071,6 +1076,11 @@ CacheVC::openReadStartHead(int event, Event * e)
       doc_pos = doc->prefix_len();
       doc_len = doc->total_len;
     }
+    char xt[33],yt[33]; // amc debug
+    Note("CacheReadStartHead - read %s target %s - %s %d of %"PRId64" bytes, %d fragments",
+         doc->key.toHexStr(xt), key.toHexStr(yt),
+         f.single_fragment ? "single" : "multi",
+         doc->len, doc->total_len, doc->nfrags());
     // the first fragment might have been gc'ed. Make sure the first
     // fragment is there before returning CACHE_EVENT_OPEN_READ
     if (!f.single_fragment)

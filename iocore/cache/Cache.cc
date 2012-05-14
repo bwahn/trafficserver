@@ -1889,7 +1889,13 @@ CacheVC::handleReadDone(int event, Event *e) {
 
     if (is_debug_tag_set("cache_read")) {
       char xt[33];
-      Debug("cache_read", "Read fragment %s len=%d/%"PRId64"/%"PRId64" %d/%d frags", doc->key.toHexStr(xt), doc->len, doc->total_len, doc_len, fragment, doc->nfrags());
+      Debug("cache_read"
+            , "Read fragment %s Length %d/%"PRId64" vc=%s doc=%s %d frags"
+            , doc->key.toHexStr(xt), doc->len, doc->total_len
+            , f.single_fragment ? "single" : "multi"
+            , doc->single_fragment() ? "single" : "multi"
+            , doc->nfrags()
+        );
     }
 
     // put into ram cache?

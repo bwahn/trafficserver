@@ -360,6 +360,12 @@ struct CacheVC: public CacheVConnection
   virtual bool set_disk_io_priority(int priority);
   virtual int get_disk_io_priority();
 
+  /** Get the fragment table.
+      @return The address of the start of the fragment table,
+      or @c NULL if there is no fragment table.
+  */
+  virtual Frag* get_frag_table();
+
   // offsets from the base stat
 #define CACHE_STAT_ACTIVE  0
 #define CACHE_STAT_SUCCESS 1
@@ -440,6 +446,7 @@ struct CacheVC: public CacheVConnection
   int64_t writer_offset;          // offset of the writer for reading from a writer
   int64_t length;                 // length of data available to write
   int64_t doc_pos;                // read position in 'buf'
+  int64_t base_pos;               // position of start of 'buf' [EXPERIMENTAL]
   uint64_t write_pos;             // length written
   uint64_t total_len;             // total length written and available to write
   uint64_t doc_len;               // total_length (of the selected alternate for HTTP)
@@ -737,6 +744,15 @@ CacheVC::writer_done()
   if (!w)
     return true;
   return false;
+}
+
+TS_INLINE Frag*
+CacheVC::get_frag_table() {
+  if (frag)
+    return frag;
+  else if (first_buf)
+    return reinterpret_cast<Doc*>(first_buf->data())->frags();
+  return 0;
 }
 
 TS_INLINE int
