@@ -193,15 +193,6 @@ CacheVC::handleWrite(int event, Event *e)
           Debug("cache_update", "Preserving fragment table (%d in %d bytes) for %s",
                 old_header->nfrags(), frag_len, first_key.toHexStr(x));
         }
-      } else if (!f.single_fragment && old_header->single_fragment()) {
-        // Conversion from single fragment to multi-fragment. This can only
-        // happen if the object fits in a fragment so a table with only
-        // one entry is fine. It makes other logic simpler to have all multi
-        // fragment objects contain a fragment table.
-        frag = integral_frags;
-        frag[0].offset = 0;
-        frag_len = sizeof(Frag);
-        Debug("cache_update", "Writing out single fragment document as multi-frag.");
       } else {
         if (is_debug_tag_set("cache_update"))
           Debug("cache_update",

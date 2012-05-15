@@ -635,31 +635,27 @@ CacheVC::openReadMain(int event, Event * e)
       Debug("cache_seek", "Seek %"PRId64" in %s at %"PRId64" of %d",
             seek_to, first_key.toHexStr(b), doc_pos, doc->len);
     }
-    if (!f.single_fragment) {
-      // Last Fragment Index
+    if (!first_doc->single_fragment()) {
+      int target = 0;
+      uint64_t next_off = frags[target].offset;
       int lfi = static_cast<int>(first_doc->nfrags()) - 1;
-      int target = fragment; // index of target fragment.
       ink_debug_assert(lfi >= 0); // because it's not a single frag doc.
 
-      // 3 cases - seek earlier fragment, seek later fragment,
-      // or seek target is in the current fragment. We only schedule a read
-      // for the first two. A bit overkill but we do want to check if we're
-      // already in the fragment and once we do that, we might as well do this.
-      if (seek_to < frags[fragment].offset) {
-        ink_debug_assert(fragment > 0);
-        target = fragment - 1;
-      } else if (fragment < lfi && seek_to >= frags[fragment+1].offset) {
-        target = lfi; // should terminate before target == fragment
+      if (fragment == 0 || seek_to < frags[fragment-1].offset || seek_to <= frags[fragment].offset) {
+        // search from frag 0 on to find the proper frag
+        while (seek_to > next_off && target < lfi) {
+          next_off = frags[++target].offset;
+        }
+      } else {
+        // shortcut if we are in the fragment already
+        target = fragment;
       }
+
       if (target != fragment) {
-        int cfi = fragment; // current fragment index
-        // We search down because offset is the start of the fragment.
-        while ( target > 0 && seek_to < frags[target].offset )
-          --target;
-        // fragment is the current fragment
-        // key is the next key (fragment + 1)
-        ink_debug_assert(target != fragment);
-        --target; // read will increment the key and fragment
+        // Lread will read the next fragment always, so if that
+        // is the one we want, we don't need to do anything
+        int cfi = fragment;
+        target--;
         while (target > fragment) {
           next_CacheKey(&key, &key);
           ++fragment;
@@ -682,6 +678,12 @@ CacheVC::openReadMain(int event, Event * e)
     vio.ndone = 0;
     seek_to = 0;
     ntodo = vio.ntodo();
+    bytes = doc->len - doc_pos;
+    if (is_debug_tag_set("cache_seek")) {
+      char target_key_str[33];
+      key.toHexStr(target_key_str);
+      Debug("cache_seek", "Starting Read %d:%"PRId64" of %d", fragment, doc_pos, doc->len);
+    }
   }
   if (ntodo <= 0)
     return EVENT_CONT;
