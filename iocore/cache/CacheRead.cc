@@ -641,13 +641,16 @@ CacheVC::openReadMain(int event, Event * e)
       int lfi = static_cast<int>(first_doc->nfrags()) - 1;
       ink_debug_assert(lfi >= 0); // because it's not a single frag doc.
 
-      if (fragment == 0 || seek_to < frags[fragment-1].offset || seek_to <= frags[fragment].offset) {
+      /* Note: frag[i].offset is the offset of the first byte past the
+         i'th fragment. So frag[0].offset is the offset of the first
+         byte of fragment 1.
+      */
+      if (fragment == 0 || seek_to < frags[fragment-1].offset || frags[fragment].offset <= seek_to) {
         // search from frag 0 on to find the proper frag
-        while (seek_to > next_off && target < lfi) {
+        while (seek_to >= next_off && target < lfi) {
           next_off = frags[++target].offset;
         }
-      } else {
-        // shortcut if we are in the fragment already
+      } else { // shortcut if we are in the fragment already
         target = fragment;
       }
 
