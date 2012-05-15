@@ -635,7 +635,7 @@ CacheVC::openReadMain(int event, Event * e)
       Debug("cache_seek", "Seek %"PRId64" in %s at %"PRId64" of %d",
             seek_to, first_key.toHexStr(b), doc_pos, doc->len);
     }
-    if (!first_doc->single_fragment()) {
+    if (!doc->single_fragment()) {
       int target = 0;
       uint64_t next_off = frags[target].offset;
       int lfi = static_cast<int>(first_doc->nfrags()) - 1;

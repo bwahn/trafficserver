@@ -193,14 +193,6 @@ CacheVC::handleWrite(int event, Event *e)
           Debug("cache_update", "Preserving fragment table (%d in %d bytes) for %s",
                 old_header->nfrags(), frag_len, first_key.toHexStr(x));
         }
-      } else {
-        if (is_debug_tag_set("cache_update"))
-          Debug("cache_update",
-                "Writing first key no fragment table now=%s then=%s %d/%"PRId64
-               , f.single_fragment ? "single" : "multi"
-               , old_header->single_fragment() ? "single" : "multi"
-               , old_header->len, old_header->total_len
-            );
       }
     }
   }
