@@ -643,22 +643,28 @@ CacheVC::openReadMain(int event, Event * e)
 
       /* Note: frag[i].offset is the offset of the first byte past the
          i'th fragment. So frag[0].offset is the offset of the first
-         byte of fragment 1.
+         byte of fragment 1. In addition the # of fragments is one
+         more than the fragment table length, the start of the last
+         fragment being the last offset in the table.
       */
-      if (fragment == 0 || seek_to < frags[fragment-1].offset || frags[fragment].offset <= seek_to) {
+      if (fragment == 0 ||
+          seek_to < frags[fragment-1].offset ||
+          (fragment <= lfi && frags[fragment].offset <= seek_to)
+        ) {
         // search from frag 0 on to find the proper frag
         while (seek_to >= next_off && target < lfi) {
           next_off = frags[++target].offset;
         }
+        if (target == lfi && seek_to >= next_off) ++target;
       } else { // shortcut if we are in the fragment already
         target = fragment;
       }
-
+      Debug("cache_seek", "Seek fragment %d -> %d", fragment, target);
       if (target != fragment) {
         // Lread will read the next fragment always, so if that
         // is the one we want, we don't need to do anything
         int cfi = fragment;
-        target--;
+        --target;
         while (target > fragment) {
           next_CacheKey(&key, &key);
           ++fragment;
