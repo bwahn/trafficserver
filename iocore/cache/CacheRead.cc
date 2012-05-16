@@ -631,9 +631,9 @@ CacheVC::openReadMain(int event, Event * e)
     Doc *first_doc = (Doc*)first_buf->data();
     Frag *frags = first_doc->frags();
     if (is_debug_tag_set("cache_seek")) {
-      char b[33];
-      Debug("cache_seek", "Seek %"PRId64" in %s at %"PRId64" of %d",
-            seek_to, first_key.toHexStr(b), doc_pos, doc->len);
+      char b[33], c[33];
+      Debug("cache_seek", "Seek @ %"PRId64" in %s from #%d @ %"PRId64"/%d:%s",
+            seek_to, first_key.toHexStr(b), fragment, doc_pos, doc->len, doc->key.toHexStr(c));
     }
     if (!doc->single_fragment()) {
       int target = 0;
@@ -659,7 +659,6 @@ CacheVC::openReadMain(int event, Event * e)
       } else { // shortcut if we are in the fragment already
         target = fragment;
       }
-      Debug("cache_seek", "Seek fragment %d -> %d", fragment, target);
       if (target != fragment) {
         // Lread will read the next fragment always, so if that
         // is the one we want, we don't need to do anything
@@ -677,7 +676,7 @@ CacheVC::openReadMain(int event, Event * e)
         if (is_debug_tag_set("cache_seek")) {
           char target_key_str[33];
           key.toHexStr(target_key_str);
-          Debug("cache_seek", "Seek %d:%"PRId64" -> %d:%"PRId64":%s", cfi, doc_pos, target, seek_to, target_key_str);
+          Debug("cache_seek", "Seek #%d @ %"PRId64" -> #%d @ %"PRId64":%s", cfi, doc_pos, target, seek_to, target_key_str);
         }
         goto Lread;
       }
@@ -691,7 +690,7 @@ CacheVC::openReadMain(int event, Event * e)
     if (is_debug_tag_set("cache_seek")) {
       char target_key_str[33];
       key.toHexStr(target_key_str);
-      Debug("cache_seek", "Starting Read %d:%"PRId64" of %d", fragment, doc_pos, doc->len);
+      Debug("cache_seek", "Read # %d @ %"PRId64"/%d for %"PRId64, fragment, doc_pos, doc->len, bytes);
     }
   }
   if (ntodo <= 0)
