@@ -447,7 +447,6 @@ struct CacheVC: public CacheVConnection
   int64_t writer_offset;          // offset of the writer for reading from a writer
   int64_t length;                 // length of data available to write
   int64_t doc_pos;                // read position in 'buf'
-  int64_t base_pos;               // position of start of 'buf' [EXPERIMENTAL]
   uint64_t write_pos;             // length written
   uint64_t total_len;             // total length written and available to write
   uint64_t doc_len;               // total_length (of the selected alternate for HTTP)

@@ -635,6 +635,13 @@ CacheVC::openReadMain(int event, Event * e)
       Debug("cache_seek", "Seek @ %"PRId64" in %s from #%d @ %"PRId64"/%d:%s",
             seek_to, first_key.toHexStr(b), fragment, doc_pos, doc->len, doc->key.toHexStr(c));
     }
+    /* Because single fragment objects can migrate to hang off an alt vector
+       they can appear to the VC as multi-fragment when they are not really.
+       The essential difference is the existence of a fragment table. All
+       fragments past the header fragment have the same value for this check
+       and it's consistent with the existence of a frag table in first_doc.
+       f.single_fragment is not (it can be false when this check is true).
+    */
     if (!doc->single_fragment()) {
       int target = 0;
       uint64_t next_off = frags[target].offset;
