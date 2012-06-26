@@ -8311,4 +8311,52 @@ TSHttpTxnBackgroundFillStarted(TSHttpTxn txnp)
   return (s->background_fill == BACKGROUND_FILL_STARTED);
 }
 
+TSReturnCode
+TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style)
+{
+  if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
+    return TS_ERROR;
+
+  HttpSM *sm = (HttpSM *) txnp;
+  if (!sm->ua_session)
+    return TS_ERROR;
+
+  if (style)
+    *style = static_cast<TSHostResStyle>(sm->ua_session->res_host_res_style);
+
+  return TS_SUCCESS;
+}
+
+TSReturnCode
+TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style)
+{
+  if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
+    return TS_ERROR;
+
+  HttpSM *sm = (HttpSM *) txnp;
+  if (!sm->ua_session)
+    return TS_ERROR;
+  sm->ua_session->res_host_res_style = static_cast<HostResStyle>(style);
+  return TS_SUCCESS;
+}
+
+TSReturnCode
+TSHttpTxnSetHostResPreference(TSHttpTxn txnp, TSHostResPreferenceOrder order)
+{
+  if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
+    return TS_ERROR;
+
+  HttpSM *sm = (HttpSM *) txnp;
+  if (!sm->ua_session) return TS_ERROR;
+
+  NetVConnection* vc = sm->ua_session->get_netvc();
+  if (!vc) return TS_ERROR;
+
+  sockaddr const* ip = vc->get_remote_addr();
+  if (!ats_is_ip(ip)) return TS_ERROR;
+
+  sm->ua_session->res_host_res_style = static_cast<HostResStyle>(ats_res_calc_style(ip->sa_family, reinterpret_cast<DNSFamilyPreference*>(order)));
+  return TS_SUCCESS;
+}
+
 #endif //TS_NO_API

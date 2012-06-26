@@ -3543,40 +3543,33 @@ void
 HttpTransact::delete_srv_entry(State* s, int max_retries)
 {
   /* we are using SRV lookups and this host failed -- lets remove it from the HostDB */
-  INK_MD5 md5;
+  HostDBMD5 md5;
   EThread *thread = this_ethread();
   //ProxyMutex *mutex = thread->mutex;
-  void *pDS = 0;
+  md5.host_name = s->dns_info.srv_hostname;
+  if (!md5.host_name) {
+    TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
+  }
+  md5.host_len = strlen(md5.host_name);
+  md5.db_mark = HOSTDB_MARK_SRV;
+  md5.refresh();
 
-  int len;
-  int port;
-  ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5) % hostDB.buckets));
-
-  char *hostname = s->dns_info.srv_hostname;    /* of the form: _http._tcp.host.foo.bar.com */
+  ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
 
   s->current.attempts++;
 
   DebugTxn("http_trans", "[delete_srv_entry] attempts now: %d, max: %d", s->current.attempts, max_retries);
   DebugTxn("dns_srv", "[delete_srv_entry] attempts now: %d, max: %d", s->current.attempts, max_retries);
 
-  if (!hostname) {
-    TRANSACT_RETURN(OS_RR_MARK_DOWN, ReDNSRoundRobin);
-  }
-
-  len = strlen(hostname);
-  port = 0;
-
-  make_md5(md5, hostname, len, port, 0, 1);
-
   MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
   if (lock) {
-    IpEndpoint ip;
-    HostDBInfo *r = probe(bucket_mutex, md5, hostname, len, ats_ip4_set(&ip.sa, INADDR_ANY, htons(port)), pDS, false, true);
+//    IpEndpoint ip;
+    HostDBInfo *r = probe(bucket_mutex, md5, false);
     if (r) {
       if (r->is_srv) {
-        DebugTxn("dns_srv", "Marking SRV records for %s [Origin: %s] as bad", hostname, s->dns_info.lookup_name);
+        DebugTxn("dns_srv", "Marking SRV records for %s [Origin: %s] as bad", md5.host_name, s->dns_info.lookup_name);
 
-        uint64_t folded_md5 = fold_md5(md5);
+        uint64_t folded_md5 = fold_md5(md5.hash);
 
         HostDBInfo *new_r = NULL;
 
@@ -3587,7 +3580,7 @@ HttpTransact::delete_srv_entry(State* s, int max_retries)
         hostDB.delete_block(r); //delete the original HostDB
 
         new_r = hostDB.insert_block(folded_md5, NULL, 0);       //create new entry
-        new_r->md5_high = md5[1];
+        new_r->md5_high = md5.hash[1];
 
         SortableQueue<SRV> *q = srv_hosts.getHosts();        //get the Queue of SRV entries
         SRV *srv_entry = NULL;
@@ -3659,7 +3652,7 @@ HttpTransact::delete_srv_entry(State* s, int max_retries)
         }
 
       } else {
-        DebugTxn("dns_srv", "Trying to delete a bad SRV for %s and something was wonky", hostname);
+        DebugTxn("dns_srv", "Trying to delete a bad SRV for %s and something was wonky", md5.host_name);
       }
     } else {
       DebugTxn("dns_srv", "No SRV data to remove. Ruh Roh Shaggy. Maxing out connection attempts...");

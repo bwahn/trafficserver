@@ -102,6 +102,7 @@
 
 /*%
  *  * Resolver options (keep these in synch with res_debug.c, please)
+ [amc] Most of these are never used. AFAICT it's RECURSE and DEBUG only.
  *   */
 #define INK_RES_INIT        0x00000001      /*%< address initialized */
 #define INK_RES_DEBUG       0x00000002      /*%< print debug messages */
@@ -146,6 +147,47 @@
 
 #define INK_NS_TYPE_ELT  0x40 /*%< EDNS0 extended label type */
 #define INK_DNS_LABELTYPE_BITSTRING 0x41
+
+/// IP family preference for DNS resolution.
+/// Used for configuration.
+enum DNSFamilyPreference {
+  DNS_PREFER_NONE = 0, ///< Invalid / init value.
+  DNS_PREFER_CLIENT, ///< Prefer family of client connection.
+  DNS_PREFER_IPV4, ///< Prefer IPv4.
+  DNS_PREFER_IPV6  ///< Prefer IPv6
+};
+/// # of preference values.
+static int const N_DNS_FAMILY_PREFERENCE = DNS_PREFER_IPV6+1;
+/// # of entries in a preference ordering.
+static int const N_DNS_FAMILY_PREFERENCE_ORDER = 3;
+/// Storage for preference ordering.
+typedef DNSFamilyPreference DNSFamilyPreferenceOrder[N_DNS_FAMILY_PREFERENCE_ORDER];
+/// Global, hard wired default value for preference ordering.
+extern DNSFamilyPreferenceOrder const DNS_DEFAULT_FAMILY_PREFERENCE_ORDER;
+/// Global (configurable) default.
+extern DNSFamilyPreferenceOrder dns_default_family_preference_order;
+/// String versions of @c FamilyPreference
+extern char const* const DNS_FAMILY_PREFERENCE_STRING[N_DNS_FAMILY_PREFERENCE];
+
+/// IP family to use in a DNS query for a host address.
+/// Used during DNS query operations.
+enum HostResStyle{
+  HOST_RES_NONE = 0, ///< No preference / unspecified / init value.
+  HOST_RES_IPV4, ///< Use IPv4 if possible.
+  HOST_RES_IPV4_ONLY, ///< Resolve on IPv4 addresses.
+  HOST_RES_IPV6, ///< Use IPv6 if possible.
+  HOST_RES_IPV6_ONLY ///< Resolve only IPv6 addresses.
+};
+
+/// Strings for query styles
+extern char const* const HOST_RES_STYLE_STRING[];
+
+/// Caclulate the effective resolution preferences.
+extern HostResStyle
+ats_res_calc_style(
+		   int family, ///< Connection family
+		   DNSFamilyPreferenceOrder ///< Preference ordering.
+		   );
 
 #ifndef NS_GET16
 #define NS_GET16(s, cp) do { \

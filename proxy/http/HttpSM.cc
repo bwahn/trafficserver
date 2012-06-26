@@ -1971,22 +1971,16 @@ lookup:
 
   HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_hostdb_lookup);
 
+  HostDBProcessor::Options opt;
   if (t_state.api_txn_dns_timeout_value != -1) {
+    opt.timeout = t_state.api_txn_dns_timeout_value;
     DebugSM("http_timeout", "beginning DNS lookup. allowing %d mseconds for DNS", t_state.api_txn_dns_timeout_value);
   }
+  opt.flags = (t_state.cache_info.directives.does_client_permit_dns_storing) ? HostDBProcessor::HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::HOSTDB_FORCE_DNS_RELOAD;
+  opt.port = server_port;
+  opt.host_res_style = ua_session->res_host_res_style;
 
-  Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this,
-                                                                   (process_hostdb_info_pfn) & HttpSM::
-                                                                   process_hostdb_info,
-                                                                   &new_host[0], 0,
-                                                                   server_port,
-                                                                   ((t_state.cache_info.directives.
-                                                                     does_client_permit_dns_storing) ? HostDBProcessor::
-                                                                    HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::
-                                                                    HOSTDB_FORCE_DNS_RELOAD),
-                                                                   (t_state.api_txn_dns_timeout_value != -1) ? t_state.
-                                                                   api_txn_dns_timeout_value : 0);
-
+  Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this, (process_hostdb_info_pfn) & HttpSM::process_hostdb_info, &new_host[0], 0, opt);
 
   if (dns_lookup_action_handle != ACTION_RESULT_DONE) {
     ink_assert(!pending_action);
@@ -2001,7 +1995,7 @@ lookup:
 void
 HttpSM::process_hostdb_info(HostDBInfo * r)
 {
-  if (r) {
+  if (r && !r->failed()) {
     HostDBInfo *rr = NULL;
     t_state.dns_info.lookup_success = true;
 
@@ -3758,9 +3752,11 @@ HttpSM::do_hostdb_lookup()
     DebugSM("dns_srv", "Beginning lookup of SRV records for origin %s", d);
     HTTP_SM_SET_DEFAULT_HANDLER(&HttpSM::state_srv_lookup);
 
+    HostDBProcessor::Options opt;
+    if (t_state.api_txn_dns_timeout_value != -1)
+      opt.timeout = t_state.api_txn_dns_timeout_value;
     Action *srv_lookup_action_handle =
-      hostDBProcessor.getSRVbyname_imm(this, (process_srv_info_pfn) & HttpSM::process_srv_info, d,
-                                       (t_state.api_txn_dns_timeout_value != -1) ? t_state.api_txn_dns_timeout_value : 0);
+      hostDBProcessor.getSRVbyname_imm(this, (process_srv_info_pfn) & HttpSM::process_srv_info, d, 0, opt);
 
     if (srv_lookup_action_handle != ACTION_RESULT_DONE) {
       ink_assert(!pending_action);
@@ -3780,18 +3776,16 @@ HttpSM::do_hostdb_lookup()
             t_state.api_txn_dns_timeout_value);
     }
 
-    Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this,
-                                                                     (process_hostdb_info_pfn) & HttpSM::
-                                                                     process_hostdb_info,
-                                                                     t_state.dns_info.lookup_name, 0,
-                                                                     server_port,
-                                                                     ((t_state.cache_info.directives.
-                                                                       does_client_permit_dns_storing) ?
-                                                                      HostDBProcessor::
-                                                                      HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::
-                                                                      HOSTDB_FORCE_DNS_RELOAD),
-                                                                     (t_state.api_txn_dns_timeout_value != -1) ? t_state.
-                                                                     api_txn_dns_timeout_value : 0);
+    HostDBProcessor::Options opt;
+    opt.port = server_port;
+    opt.flags = (t_state.cache_info.directives.does_client_permit_dns_storing)
+      ? HostDBProcessor::HOSTDB_DO_NOT_FORCE_DNS
+      : HostDBProcessor::HOSTDB_FORCE_DNS_RELOAD
+    ;
+    opt.timeout = (t_state.api_txn_dns_timeout_value != -1) ? t_state.api_txn_dns_timeout_value : 0;
+    opt.host_res_style = ua_session->res_host_res_style;
+
+    Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this, (process_hostdb_info_pfn) & HttpSM::process_hostdb_info, t_state.dns_info.lookup_name, 0, opt);
 
     if (dns_lookup_action_handle != ACTION_RESULT_DONE) {
       ink_assert(!pending_action);

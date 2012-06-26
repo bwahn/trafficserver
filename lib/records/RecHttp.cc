@@ -77,12 +77,14 @@ char const* const HttpProxyPort::OPT_TRANSPARENT_FULL = "tr-full";
 char const* const HttpProxyPort::OPT_SSL = "ssl";
 char const* const HttpProxyPort::OPT_BLIND_TUNNEL = "blind";
 char const* const HttpProxyPort::OPT_COMPRESSED = "compressed";
+char const* const HttpProxyPort::OPT_DNS_FAMILY = "dns-family";
 
 // File local constants.
 namespace {
-size_t const OPT_FD_PREFIX_LEN = strlen(HttpProxyPort::OPT_FD_PREFIX);
-size_t const OPT_OUTBOUND_IP_PREFIX_LEN = strlen(HttpProxyPort::OPT_OUTBOUND_IP_PREFIX);
-size_t const OPT_INBOUND_IP_PREFIX_LEN = strlen(HttpProxyPort::OPT_INBOUND_IP_PREFIX);
+  size_t const OPT_FD_PREFIX_LEN = strlen(HttpProxyPort::OPT_FD_PREFIX);
+  size_t const OPT_OUTBOUND_IP_PREFIX_LEN = strlen(HttpProxyPort::OPT_OUTBOUND_IP_PREFIX);
+  size_t const OPT_INBOUND_IP_PREFIX_LEN = strlen(HttpProxyPort::OPT_INBOUND_IP_PREFIX);
+  size_t const OPT_DNS_FAMILY_PREFIX_LEN = strlen(HttpProxyPort::OPT_DNS_FAMILY);
 }
 
 namespace {
@@ -103,6 +105,7 @@ HttpProxyPort::HttpProxyPort()
   , m_inbound_transparent_p(false)
   , m_outbound_transparent_p(false)
 {
+  memcpy(m_host_res_preference, dns_default_family_preference_order, sizeof(m_host_res_preference));
 }
 
 bool HttpProxyPort::hasSSL(Group const& ports) {
@@ -342,13 +345,18 @@ HttpProxyPort::processOptions(char const* opts) {
       Warning("Transparency requested [%s] in port descriptor '%s' but TPROXY was not configured.", item, opts);
 # endif
     } else if (0 == strcasecmp(OPT_TRANSPARENT_FULL, item)||
-      0 == strcasecmp("=", item)) {
+               0 == strcasecmp("=", item)) {
 # if TS_USE_TPROXY
       m_inbound_transparent_p = true;
       m_outbound_transparent_p = true;
 # else
       Warning("Transparency requested [%s] in port descriptor '%s' but TPROXY was not configured.", item, opts);
 # endif
+    } else if (0 == strncasecmp(OPT_DNS_FAMILY, item, OPT_DNS_FAMILY_PREFIX_LEN)) {
+      item += OPT_DNS_FAMILY_PREFIX_LEN; // skip prefix
+      if ('-' == *item || '=' == *item) // permit optional '-' or '='
+        ++item;
+      this->processFamilyPreferences(item);
     } else {
       Warning("Invalid option '%s' in port configuration '%s'", item, opts);
     }
@@ -368,6 +376,54 @@ HttpProxyPort::processOptions(char const* opts) {
 
   return zret;
 }
+
+void
+HttpProxyPort::processFamilyPreferences(char const* value) {
+  Tokenizer tokens(";/|");
+  // preference from the config string.
+  int np = 0; // index in to @a m_host_res_preference
+  bool found[N_DNS_FAMILY_PREFERENCE];  // redundancy check array
+  int n; // # of tokens
+  int i; // index
+
+  n = tokens.Initialize(value);
+
+  for ( i = 0 ; i < N_DNS_FAMILY_PREFERENCE ; ++i )
+    found[i] = false;
+
+  for ( i = 0 ; i < n && np < N_DNS_FAMILY_PREFERENCE_ORDER ; ++i ) {
+    char const* elt = tokens[i];
+    // special case none/only because that terminates the sequence.
+    if (0 == strcasecmp(elt, DNS_FAMILY_PREFERENCE_STRING[DNS_PREFER_NONE])) {
+      found[DNS_PREFER_NONE] = true;
+      m_host_res_preference[np] = DNS_PREFER_NONE;
+      break;
+    } else {
+      // scan the other types
+      DNSFamilyPreference ep = DNS_PREFER_NONE;
+      for ( int ip = DNS_PREFER_NONE + 1 ; ip < N_DNS_FAMILY_PREFERENCE ; ++ip ) {
+        if (0 == strcasecmp(elt, DNS_FAMILY_PREFERENCE_STRING[ip])) {
+          ep = static_cast<DNSFamilyPreference>(ip);
+          break;
+        }
+      }
+      if (DNS_PREFER_NONE != ep && !found[ep]) { // ignore duplicates
+        found[ep] = true;
+        m_host_res_preference[np++] = ep;
+      }
+    }
+  }
+
+  if (!found[DNS_PREFER_NONE]) {
+    // If 'only' wasn't explicit, fill in the rest by default.
+    if (!found[DNS_PREFER_IPV4])
+      m_host_res_preference[np++] = DNS_PREFER_IPV4;
+    if (!found[DNS_PREFER_IPV6])
+      m_host_res_preference[np++] = DNS_PREFER_IPV6;
+    if (np < N_DNS_FAMILY_PREFERENCE)
+      m_host_res_preference[np++] = DNS_PREFER_NONE;
+  }
+}      
 
 int
 HttpProxyPort::print(char* out, size_t n) {
@@ -436,6 +492,18 @@ HttpProxyPort::print(char* out, size_t n) {
     zret += snprintf(out+zret, n-zret, ":%s", OPT_TRANSPARENT_INBOUND);
   else if (m_outbound_transparent_p)
     zret += snprintf(out+zret, n-zret, ":%s", OPT_TRANSPARENT_OUTBOUND);
+
+  if (0 != memcmp(m_host_res_preference, DNS_DEFAULT_FAMILY_PREFERENCE_ORDER, sizeof(m_host_res_preference))) {
+    zret +=  snprintf(out+zret, n-zret, ":%s=", OPT_DNS_FAMILY);
+    bool first = true;
+    for ( int i = 0 ; i < N_DNS_FAMILY_PREFERENCE ; ++i ) {
+      zret += snprintf(out+zret, n-zret, "%s%s", !first ? ";" : "",
+                       DNS_FAMILY_PREFERENCE_STRING[m_host_res_preference[i]]);
+      if (DNS_PREFER_NONE == m_host_res_preference[i])
+        break;
+      first = false;
+    }
+  }
 
   return min(zret,n);
 }

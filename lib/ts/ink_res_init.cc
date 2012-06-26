@@ -92,6 +92,22 @@
 # define isascii(c) (!(c & 0200))
 #endif
 
+DNSFamilyPreferenceOrder const DNS_DEFAULT_FAMILY_PREFERENCE_ORDER = {
+  DNS_PREFER_IPV4,
+  DNS_PREFER_IPV6,
+  DNS_PREFER_NONE
+};
+
+DNSFamilyPreferenceOrder dns_default_family_preference_order;
+
+char const* const DNS_FAMILY_PREFERENCE_STRING[N_DNS_FAMILY_PREFERENCE] = {
+    "only", "client", "ipv4", "ipv6"
+};
+
+char const* const HOST_RES_STYLE_STRING[] = {
+  "invalid", "IPv4", "IPv4 only", "IPv6", "IPv6 only"
+};
+
 /*%
  * This routine is for closing the socket if a virtual circuit is used and
  * the program wants to close it.  This provides support for endhostent()
@@ -310,6 +326,10 @@ ink_res_init(
   statp->_flags = 0;
   statp->qhook = NULL;
   statp->rhook = NULL;
+
+  memcpy(dns_default_family_preference_order,
+         DNS_DEFAULT_FAMILY_PREFERENCE_ORDER,
+         sizeof(dns_default_family_preference_order));
 
 #ifdef	SOLARIS2
   /*
