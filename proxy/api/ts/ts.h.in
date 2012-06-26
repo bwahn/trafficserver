@@ -665,6 +665,32 @@ extern "C"
       TS_MILESTONE_LAST_ENTRY
     } TSMilestonesType;
 
+  /** How to do host name resolution.
+      @internal Copy of @DNSHostQueryStyle in @c ts/ink_resolver.h
+   */
+  typedef enum 
+    {
+      TS_HOST_RES_NONE = 0, ///< Don't query (invalid value).
+      TS_HOST_RES_IPV4, ///< Query IPv4, then IPv6.
+      TS_HOST_RES_IPV4_ONLY, ///< Query only for IPv4.
+      TS_HOST_RES_IPV6, ///< Query IPV6, then IPv4.
+      TS_HOST_RES_IPV6_ONLY ///< Query only for IPv6.
+    } TSHostResStyle;
+
+  /// Values use for configuration of host name resolution preferences.
+  /// @internal Copy of DNSFamilyPreference in lib/ts/ink_resolver.h
+  typedef enum {
+    TS_HOST_RES_PREFER_NONE = 0, ///< Invalid / init value.
+    TS_HOST_RES_PREFER_CLIENT, ///< Prefer family of client connection.
+    TS_HOST_RES_PREFER_IPV4, ///< Prefer IPv4.
+    TS_HOST_RES_PREFER_IPV6  ///< Prefer IPv6
+  } TSHostResPreference;
+  static int const TS_N_HOST_RES_PREFERENCE = TS_HOST_RES_PREFER_IPV6+1;
+  /// # of entries in a preference ordering.
+  /// @internal Can't use 'int const' in gcc.
+# define TS_N_HOST_RES_PREFERENCE_ORDER 3
+  /// Storage for preference ordering.
+  typedef TSHostResPreference TSHostResPreferenceOrder[TS_N_HOST_RES_PREFERENCE_ORDER];
 
   /* These typedefs are used with the corresponding TSMgmt*Get functions
      for storing the values retrieved by those functions. For example,
@@ -3212,9 +3238,34 @@ extern "C"
   */
   tsapi void TSSkipRemappingSet(TSHttpTxn txnp, int flag);
 
+  /** Get the host resolution @a style for a transaction.
+      @param txnp [in] Transaction.
+      @param style [out] Destination storage for retreived style value.
+  */
+  tsapi TSReturnCode TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style);
 
-  /*
-    Set or get various overridable configurations, for a transaction. This should
+  /** Set the host resolution @a style for a transaction.
+      @param txnp [in] Transaction.
+      @param style ///< [in] New style.
+  */
+  tsapi TSReturnCode TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style);
+
+  /** Set the host resolution style for a transaction from a preference ordering.
+
+      @a order is reduced to a @c TSHostRestStyle based on the
+      family of the client connection in the transaction and then @c
+      TSHttpTxnSetHostResStyle is invoked with that value. This is
+      provided as a convenience for plugins that work with preferences
+      instead of styles.
+
+      @param txnp [in] Transaction.
+      @param order [in] Preference ordering.
+
+      @see TSHttpTxnSetHostResStyle
+  */
+  tsapi TSReturnCode TSHttpTxnSetHostResPreference(TSHttpTxn txnp, TSHostResPreferenceOrder const order);
+
+  /* Set or get various overridable configurations, for a transaction. This should
     probably be done as early as possible, e.g. TS_HTTP_READ_REQUEST_HDR_HOOK.
   */
   tsapi TSReturnCode TSHttpTxnConfigIntSet(TSHttpTxn txnp, TSOverridableConfigKey conf, TSMgmtInt value);

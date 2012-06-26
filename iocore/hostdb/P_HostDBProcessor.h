@@ -30,6 +30,19 @@
 
 #include "I_HostDBProcessor.h"
 
+/** Host DB record mark.
+
+    The records in the host DB are de facto segregated by roughly the
+    DNS query type. We use an intermediate type to provide a little flexibility
+    although the type is presumed to be a single byte.
+ */
+enum HostDBMark {
+  HOSTDB_MARK_GENERIC, ///< Anything that's not one of the other types.
+  HOSTDB_MARK_IPV4, ///< IPv4 / T_A
+  HOSTDB_MARK_IPV6, ///< IPv6 / T_AAAA
+  HOSTDB_MARK_SRV, ///< Service / T_SRV
+};
+
 inline unsigned int HOSTDB_CLIENT_IP_HASH(
   sockaddr const* lhs,
   sockaddr const* rhs
@@ -62,8 +75,8 @@ inline unsigned int HOSTDB_CLIENT_IP_HASH(
 
 // Bump this any time hostdb format is changed
 #define HOST_DB_CACHE_MAJOR_VERSION         2
-#define HOST_DB_CACHE_MINOR_VERSION         1
-// 2.1 : IPv6
+#define HOST_DB_CACHE_MINOR_VERSION         2
+// 2.2: IP family split 2.1 : IPv6
 
 #define DEFAULT_HOST_DB_FILENAME             "host.db"
 #define DEFAULT_HOST_DB_SIZE                 (1<<14)
@@ -290,6 +303,30 @@ HostDBRoundRobin::select_best_http(sockaddr const* client_ip, ink_time_t now, in
 // Types
 //
 
+/** Container for an MD5 hash and its dependent data.
+    This handles both the host name and raw address cases.
+*/
+struct HostDBMD5 {
+  typedef HostDBMD5 self; ///< Self reference type.
+
+  INK_MD5 hash; ///< The hash value.
+
+  char const* host_name; ///< Host name.
+  int host_len; ///< Length of @a _host_name
+  IpAddr ip; ///< IP address.
+  int port; ///< IP port (host order).
+  /// DNS server. Not strictly part of the MD5 data but
+  /// it's both used by @c HostDBContinuation and provides access to
+  /// MD5 data. It's just handier to store it here for both uses.
+  DNSServer* dns_server;
+  HostDBMark db_mark; ///< Mark / type of record.
+
+  /// Default constructor.
+  HostDBMD5();
+  /// Recompute and update the MD5 hash.
+  void refresh();
+};
+
 //
 // Handles a HostDB lookup request
 //
@@ -299,19 +336,25 @@ typedef int (HostDBContinuation::*HostDBContHandler) (int, void *);
 struct HostDBContinuation: public Continuation
 {
   Action action;
-  IpEndpoint ip;
+  HostDBMD5 md5;
+  //  IpEndpoint ip;
   unsigned int ttl;
-  bool is_srv_lookup;
+  //  HostDBMark db_mark; ///< Target type.
+  /// Original IP address family style. Note this will disagree with
+  /// @a md5.db_mark when doing a retry on an alternate family. The retry
+  /// logic depends on it to avoid looping.
+  DNSHostQueryStyle hq_style; ///< Address family priority.
   int dns_lookup_timeout;
-  INK_MD5 md5;
+  //  INK_MD5 md5;
   Event *timeout;
   ClusterMachine *from;
   Continuation *from_cont;
   HostDBApplicationInfo app;
   int probe_depth;
   ClusterMachine *past_probes[CONFIGURATION_HISTORY_PROBE_DEPTH];
-  int namelen;
-  char name[MAXDNAME];
+  //  char name[MAXDNAME];
+  //  int namelen;
+  char md5_host_name_store[MAXDNAME+1]; // used as backing store for @a md5
   void *m_pDS;
   Action *pending_action;
 
@@ -329,16 +372,18 @@ struct HostDBContinuation: public Continuation
   int removeEvent(int event, Event * e);
   int setbyEvent(int event, Event * e);
 
+  /// Recompute the MD5 and update ancillary values.
+  void refresh_MD5();
   void do_dns();
   bool is_byname()
   {
-    return ((*name && !is_srv_lookup) ? true : false);
+    return *md5.host_name && md5.db_mark != HOSTDB_MARK_SRV;
   }
   bool is_srv()
   {
-    return ((*name && is_srv_lookup) ? true : false);
+    return *md5.host_name && md5.db_mark == HOSTDB_MARK_SRV;
   }
-  HostDBInfo *lookup_done(sockaddr const* aip, char *aname, bool round_robin, unsigned int attl, SRVHosts * s = NULL);
+  HostDBInfo *lookup_done(sockaddr const* aip, char const* aname, bool round_robin, unsigned int attl, SRVHosts * s = NULL);
   bool do_get_response(Event * e);
   void do_put_response(ClusterMachine * m, HostDBInfo * r, Continuation * cont);
   int failed_cluster_request(Event * e);
@@ -350,20 +395,35 @@ struct HostDBContinuation: public Continuation
 
   HostDBInfo *insert(unsigned int attl);
 
-  void init(const char *hostname, int len, sockaddr const* ip, INK_MD5 & amd5,
-            Continuation * cont, void *pDS = 0, bool is_srv = false, int timeout = 0);
+  /** Optional values for @c init.
+   */
+  struct Options {
+    typedef Options self; ///< Self reference type.
+
+    int timeout; ///< Timeout value. Default 0
+    DNSHostQueryStyle hq_style; ///< IP address family fallback. Default @c DNS_HOST_QUERY_NONE
+    bool force_dns; ///< Force DNS lookup. Default @c false
+    Continuation* cont; ///< Continuation / action. Default @c NULL (none)
+
+    Options()
+      : timeout(0), hq_style(DNS_HOST_QUERY_NONE), force_dns(false), cont(0)
+    { }
+  };
+  static const Options DEFAULT_OPTIONS; ///< Default defaults.
+  void init(HostDBMD5 const& md5,
+            Options const& opt = DEFAULT_OPTIONS);
   int make_get_message(char *buf, int len);
   int make_put_message(HostDBInfo * r, Continuation * c, char *buf, int len);
 
 HostDBContinuation():
   Continuation(NULL), ttl(0),
-    is_srv_lookup(false), dns_lookup_timeout(0),
+    hq_style(DEFAULT_OPTIONS.hq_style),
+    dns_lookup_timeout(DEFAULT_OPTIONS.timeout),
     timeout(0), from(0),
-    from_cont(0), probe_depth(0), namelen(0), missing(false), force_dns(false), round_robin(false) {
-    memset(&ip, 0, sizeof ip);
-    memset(name, 0, MAXDNAME);
-    md5.b[0] = 0;
-    md5.b[1] = 0;
+    from_cont(0), probe_depth(0), missing(false),
+    force_dns(DEFAULT_OPTIONS.force_dns), round_robin(false) {
+    ink_zero(md5_host_name_store);
+    ink_zero(md5.hash);
     SET_HANDLER((HostDBContHandler) & HostDBContinuation::probeEvent);
   }
 };
@@ -402,9 +462,9 @@ extern HostDBCache hostDB;
 //extern Queue<HostDBContinuation>  remoteHostDBQueue[MULTI_CACHE_PARTITIONS];
 
 inline unsigned int
-master_hash(INK_MD5 & md5)
+master_hash(INK_MD5 const& md5)
 {
-  return (int) (md5[1] >> 32);
+  return static_cast<int>(md5[1] >> 32);
 }
 
 inline bool
@@ -422,7 +482,7 @@ HostDBCache::pending_dns_for_hash(INK_MD5 & md5)
 inline int
 HostDBContinuation::key_partition()
 {
-  return hostDB.partition_of_bucket(fold_md5(md5) % hostDB.buckets);
+  return hostDB.partition_of_bucket(fold_md5(md5.hash) % hostDB.buckets);
 }
 
 #endif /* _P_HostDBProcessor_h_ */

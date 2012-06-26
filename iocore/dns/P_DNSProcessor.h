@@ -148,7 +148,8 @@ extern RecRawStatBlock *dns_rsb;
 struct DNSEntry: public Continuation
 {
   int id[MAX_DNS_RETRIES];
-  int qtype;
+  int qtype; ///< Type of query to send.
+  DNSHostQueryStyle host_query_style; ///< Preferred IP address family.
   int retries;
   int which_ns;
   ink_hrtime submit_time;
@@ -171,11 +172,12 @@ struct DNSEntry: public Continuation
   int delayEvent(int event, Event *e);
   int post(DNSHandler *h, HostEnt *ent);
   int postEvent(int event, Event *e);
-  void init(const char *x, int len, int qtype_arg, Continuation *acont, DNSHandler *adnsH, int timeout);
+  void init(const char *x, int len, int qtype_arg, Continuation *acont, DNSProcessor::Options const& opt);
 
    DNSEntry()
      : Continuation(NULL),
        qtype(0),
+       host_query_style(DNS_HOST_QUERY_NONE),
        retries(DEFAULT_DNS_RETRIES),
        which_ns(NO_NAMESERVER_SELECTED), submit_time(0), send_time(0), qname_len(0), domains(0),
        timeout(0), result_ent(0), dnsH(0), written_flag(false), once_written_flag(false), last(false)

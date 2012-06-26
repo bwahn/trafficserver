@@ -501,3 +501,27 @@ ns_name_ntop(const u_char *src, char *dst, size_t dstsiz)
 	*dn++ = '\0';
 	return (dn - dst);
 }
+
+DNSHostQueryStyle
+ats_res_calc_style(int family, DNSFamilyPreferenceOrder order)
+{
+  bool v4 = false, v6 = false;
+  DNSFamilyPreference client = AF_INET6 == family ? DNS_PREFER_IPV6 : DNS_PREFER_IPV4;
+
+  for ( int i = 0 ; i < N_DNS_FAMILY_PREFERENCE_ORDER ; ++i ) {
+    DNSFamilyPreference p = order[i];
+    if (DNS_PREFER_CLIENT == p) p = client; // CLIENT -> actual value
+    if (DNS_PREFER_IPV4 == p) {
+      if (v6) return DNS_HOST_QUERY_IPV6;
+      else v4 = true;
+    } else if (DNS_PREFER_IPV6 == p) {
+      if (v4) return DNS_HOST_QUERY_IPV4;
+      else v6 = true;
+    } else {
+      break;
+    }
+  }
+  if (v4) return DNS_HOST_QUERY_IPV4_ONLY;
+  else if (v6) return DNS_HOST_QUERY_IPV6_ONLY;
+  return DNS_HOST_QUERY_NONE;
+}
