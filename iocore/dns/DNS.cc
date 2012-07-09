@@ -362,18 +362,18 @@ DNSEntry::init(const char *x, int len, int qtype_arg, Continuation* acont,
                DNSProcessor::Options const& opt)
 {
   qtype = qtype_arg;
-  host_query_style = opt.host_query_style;
+  host_res_style = opt.host_res_style;
   if (is_addr_query(qtype)) {
       // adjust things based on family preference.
-      if (HOST_RES_IPV4 == host_query_style ||
-          HOST_RES_IPV4_ONLY == host_query_style) {
+      if (HOST_RES_IPV4 == host_res_style ||
+          HOST_RES_IPV4_ONLY == host_res_style) {
           qtype = T_A;
-      } else if (HOST_RES_IPV6 == host_query_style ||
-                 HOST_RES_IPV6_ONLY == host_query_style) {
+      } else if (HOST_RES_IPV6 == host_res_style ||
+                 HOST_RES_IPV6_ONLY == host_res_style) {
           qtype = T_AAAA;
       }
   }
-  Debug("amc", "DNSENtry init with host res %s -> qtype %s", HOST_RES_STYLE_STRING[host_query_style], QtypeName(qtype));
+  Debug("amc", "DNSENtry init with host res %s -> qtype %s", HOST_RES_STYLE_STRING[host_res_style], QtypeName(qtype));
   submit_time = ink_get_hrtime();
   action = acont;
   submit_thread = acont->mutex->thread_holding;
@@ -1139,13 +1139,13 @@ dns_result(DNSHandler *h, DNSEntry *e, HostEnt *ent, bool retry) {
       write_dns(h);
       return;
 # if 0
-    } else if (e->qtype == T_AAAA && HOST_RES_IPV6 == e->host_query_style) {
+    } else if (e->qtype == T_AAAA && HOST_RES_IPV6 == e->host_res_style) {
       Debug("dns", "Trying A after AAAA failure for %s", e->qname);
       e->retries = dns_retries;
       e->qtype = T_A;
       write_dns(h);
       return;
-    } else if (e->qtype == T_A && HOST_RES_IPV4 == e->host_query_style) {
+    } else if (e->qtype == T_A && HOST_RES_IPV4 == e->host_res_style) {
       Debug("dns", "Trying AAAA after A failure for %s", e->qname);
       e->retries = dns_retries;
       e->qtype = T_AAAA;
@@ -1714,7 +1714,7 @@ struct DNSRegressionContinuation: public Continuation
       }
     }
     if (i < hosts) {
-        dnsProcessor.gethostbyname(this, hostnames[i], DNSProcessor::Options().setHostQueryStyle(HOST_RES_IPV4_ONLY));
+        dnsProcessor.gethostbyname(this, hostnames[i], DNSProcessor::Options().setHostResStyle(HOST_RES_IPV4_ONLY));
       ++i;
       return EVENT_CONT;
     } else {

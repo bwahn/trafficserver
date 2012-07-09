@@ -343,7 +343,7 @@ struct HostDBContinuation: public Continuation
   /// Original IP address family style. Note this will disagree with
   /// @a md5.db_mark when doing a retry on an alternate family. The retry
   /// logic depends on it to avoid looping.
-  HostResStyle hq_style; ///< Address family priority.
+  HostResStyle host_res_style; ///< Address family priority.
   int dns_lookup_timeout;
   //  INK_MD5 md5;
   Event *timeout;
@@ -401,12 +401,12 @@ struct HostDBContinuation: public Continuation
     typedef Options self; ///< Self reference type.
 
     int timeout; ///< Timeout value. Default 0
-    HostResStyle hq_style; ///< IP address family fallback. Default @c HOST_RES_NONE
+    HostResStyle host_res_style; ///< IP address family fallback. Default @c HOST_RES_NONE
     bool force_dns; ///< Force DNS lookup. Default @c false
     Continuation* cont; ///< Continuation / action. Default @c NULL (none)
 
     Options()
-      : timeout(0), hq_style(HOST_RES_NONE), force_dns(false), cont(0)
+      : timeout(0), host_res_style(HOST_RES_NONE), force_dns(false), cont(0)
     { }
   };
   static const Options DEFAULT_OPTIONS; ///< Default defaults.
@@ -417,7 +417,7 @@ struct HostDBContinuation: public Continuation
 
 HostDBContinuation():
   Continuation(NULL), ttl(0),
-    hq_style(DEFAULT_OPTIONS.hq_style),
+    host_res_style(DEFAULT_OPTIONS.host_res_style),
     dns_lookup_timeout(DEFAULT_OPTIONS.timeout),
     timeout(0), from(0),
     from_cont(0), probe_depth(0), missing(false),

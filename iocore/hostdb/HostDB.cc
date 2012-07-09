@@ -468,7 +468,7 @@ HostDBContinuation::init(HostDBMD5 const& the_md5, Options const& opt)
     md5_host_name_store[md5.host_len] = 0;
     md5.host_name = md5_host_name_store;
   }
-  hq_style = opt.hq_style;
+  host_res_style = opt.host_res_style;
   dns_lookup_timeout = opt.timeout;
   mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
   if (opt.cont) {
@@ -584,12 +584,12 @@ Ldelete:
 }
 
 inline HostResStyle
-calc_hq_style_for(sockaddr const* ip) {
+calc_host_res_style_for(sockaddr const* ip) {
   return ats_is_ip6(ip) ? HOST_RES_IPV6_ONLY : HOST_RES_IPV4_ONLY;
 }
 
 inline HostResStyle
-calc_hq_style_for(HostDBMark mark) {
+calc_host_res_style_for(HostDBMark mark) {
   return HOSTDB_MARK_IPV4 == mark ? HOST_RES_IPV4_ONLY
     : HOSTDB_MARK_IPV6 == mark ? HOST_RES_IPV6_ONLY
     : HOST_RES_NONE
@@ -663,7 +663,7 @@ probe(ProxyMutex *mutex, HostDBMD5 const& md5, bool ignore_timeout)
         if (!is_dotted_form_hostname(md5.host_name)) {
           HostDBContinuation *c = hostDBContAllocator.alloc();
           HostDBContinuation::Options copt;
-          copt.hq_style = calc_hq_style_for(r->ip());
+          copt.host_res_style = calc_host_res_style_for(r->ip());
           c->init(md5, copt);
           c->do_dns();
         }
@@ -790,7 +790,7 @@ Lretry:
   opt.timeout = dns_lookup_timeout;
   opt.force_dns = aforce_dns;
   opt.cont = cont;
-  opt.hq_style = query_style;
+  opt.host_res_style = query_style;
   c->init(md5, opt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler) & HostDBContinuation::probeEvent);
 
@@ -973,7 +973,7 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
   copt.cont = cont;
   copt.force_dns = force_dns;
   copt.timeout = opt.timeout;
-  copt.hq_style = opt.query_style;
+  copt.host_res_style = opt.query_style;
   c->init(md5, copt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler) & HostDBContinuation::probeEvent);
 
@@ -1368,14 +1368,14 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
       rr = !failed && (e->srv_hosts.getCount() > 0);
     } else if (!failed) {
       rr = 0 != e->ent.h_addr_list[1];
-    } else if (HOSTDB_MARK_IPV4 == md5.db_mark && HOST_RES_IPV4 == hq_style) {
+    } else if (HOSTDB_MARK_IPV4 == md5.db_mark && HOST_RES_IPV4 == host_res_style) {
       Debug("amc", "HostDB failed for IPv4, retrying with IPv6");
       md5.db_mark = HOSTDB_MARK_IPV6;
       this->refresh_MD5();
       SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
       thread->schedule_in(this, MUTEX_RETRY_DELAY);
       return EVENT_CONT;
-    } else if (HOSTDB_MARK_IPV6 == md5.db_mark && HOST_RES_IPV6 == hq_style) {
+    } else if (HOSTDB_MARK_IPV6 == md5.db_mark && HOST_RES_IPV6 == host_res_style) {
       Debug("amc", "HostDB failed for IPv6, retrying with IPv4");
       md5.db_mark = HOSTDB_MARK_IPV4;
       this->refresh_MD5();
@@ -1383,7 +1383,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
       thread->schedule_in(this, MUTEX_RETRY_DELAY);
       return EVENT_CONT;
     } else {
-      Debug("amc", "HostDB lookup failed mark=%d hq_style=%s", md5.db_mark, HOST_RES_STYLE_STRING[hq_style]);
+      Debug("amc", "HostDB lookup failed mark=%d host_res_style=%s", md5.db_mark, HOST_RES_STYLE_STRING[host_res_style]);
     }
 
     ttl = failed ? 0 : e->ttl / 60;
@@ -1836,7 +1836,7 @@ HostDBContinuation::do_dns()
   if (set_check_pending_dns()) {
     DNSProcessor::Options opt;
     opt.timeout = dns_lookup_timeout;
-    opt.host_query_style = calc_hq_style_for(md5.db_mark);
+    opt.host_res_style = calc_host_res_style_for(md5.db_mark);
     SET_HANDLER((HostDBContHandler) & HostDBContinuation::dnsEvent);
     if (is_byname()) {
       if (md5.dns_server)
@@ -2019,7 +2019,7 @@ get_hostinfo_ClusterFunction(ClusterHandler *ch, void *data, int len)
      DNS servers
      ----------------------------------------- */
 
-  copt.hq_style = calc_hq_style_for(&msg->ip.sa);
+  copt.host_res_style = calc_host_res_style_for(&msg->ip.sa);
   c->init(md5, copt);
   c->mutex = hostDB.lock_for_bucket(fold_md5(msg->md5) % hostDB.buckets);
   c->action.mutex = c->mutex;
@@ -2043,7 +2043,7 @@ put_hostinfo_ClusterFunction(ClusterHandler *ch, void *data, int len)
   md5.port = ats_ip_port_host_order(&msg->ip.sa);
   md5.hash = msg->md5;
   md5.db_mark = calc_db_mark(&msg->ip.sa);
-  copt.hq_style = calc_hq_style_for(&msg->ip.sa);
+  copt.host_res_style = calc_host_res_style_for(&msg->ip.sa);
   c->init(md5, copt);
   c->mutex = hostDB.lock_for_bucket(fold_md5(msg->md5) % hostDB.buckets);
   c->from_cont = msg->cont;     // cannot use action if cont freed due to timeout
