@@ -104,7 +104,7 @@ char const* const DNS_FAMILY_PREFERENCE_STRING[N_DNS_FAMILY_PREFERENCE] = {
     "only", "client", "ipv4", "ipv6"
 };
 
-char const* const DNS_HOST_QUERY_STYLE_STRING[] = {
+char const* const HOST_RES_STYLE_STRING[] = {
   "invalid", "IPv4", "IPv4 only", "IPv6", "IPv6 only"
 };
 

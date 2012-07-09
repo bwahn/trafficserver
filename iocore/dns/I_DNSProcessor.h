@@ -79,8 +79,8 @@ struct DNSProcessor: public Processor
     /// Default: @c DEFAULT_DNS_TIMEOUT (or as set in records.config)
     int timeout; ///< Timeout value for request.
     /// IP family preference.
-    /// Default: IPv4, IPv6 ( @c DNS_HOST_QUERY_IPV4 )
-    DNSHostQueryStyle host_query_style;
+    /// Default: IPv4, IPv6 ( @c HOST_RES_IPV4 )
+    HostResStyle host_query_style;
 
     /// Default constructor.
     Options();
@@ -95,7 +95,7 @@ struct DNSProcessor: public Processor
 
     /// Set host query @a style option.
     /// @return This object.
-    self& setHostQueryStyle(DNSHostQueryStyle style);
+    self& setHostQueryStyle(HostResStyle style);
 
     /// Reset to default constructed values.
     /// @return This object.
@@ -183,7 +183,7 @@ DNSProcessor::gethostbyaddr(Continuation *cont, IpAddr const* addr, Options cons
 inline DNSProcessor::Options::Options()
                     : handler(0)
                     , timeout(0)
-                    , host_query_style(DNS_HOST_QUERY_IPV4)
+                    , host_query_style(HOST_RES_IPV4)
 {
 }
 
@@ -202,7 +202,7 @@ DNSProcessor::Options::setTimeout(int t)
 }
 
 inline DNSProcessor::Options&
-DNSProcessor::Options::setHostQueryStyle(DNSHostQueryStyle style)
+DNSProcessor::Options::setHostQueryStyle(HostResStyle style)
 {
   host_query_style = style;
   return *this;

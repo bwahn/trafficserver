@@ -171,19 +171,19 @@ extern char const* const DNS_FAMILY_PREFERENCE_STRING[N_DNS_FAMILY_PREFERENCE];
 
 /// IP family to use in a DNS query for a host address.
 /// Used during DNS query operations.
-enum DNSHostQueryStyle{
-  DNS_HOST_QUERY_NONE = 0, ///< No preference / unspecified / init value.
-  DNS_HOST_QUERY_IPV4, ///< Use IPv4 if possible.
-  DNS_HOST_QUERY_IPV4_ONLY, ///< Resolve on IPv4 addresses.
-  DNS_HOST_QUERY_IPV6, ///< Use IPv6 if possible.
-  DNS_HOST_QUERY_IPV6_ONLY ///< Resolve only IPv6 addresses.
+enum HostResStyle{
+  HOST_RES_NONE = 0, ///< No preference / unspecified / init value.
+  HOST_RES_IPV4, ///< Use IPv4 if possible.
+  HOST_RES_IPV4_ONLY, ///< Resolve on IPv4 addresses.
+  HOST_RES_IPV6, ///< Use IPv6 if possible.
+  HOST_RES_IPV6_ONLY ///< Resolve only IPv6 addresses.
 };
 
 /// Strings for query styles
-extern char const* const DNS_HOST_QUERY_STYLE_STRING[];
+extern char const* const HOST_RES_STYLE_STRING[];
 
 /// Caclulate the effective resolution preferences.
-extern DNSHostQueryStyle
+extern HostResStyle
 ats_res_calc_style(
 		   int family, ///< Connection family
 		   DNSFamilyPreferenceOrder ///< Preference ordering.

@@ -152,7 +152,7 @@ public:
   /// Set outbound connection to transparent.
   bool f_outbound_transparent;
   /// DNS resolution preferences.
-  DNSHostQueryStyle res_query_style;
+  HostResStyle res_query_style;
   /// acl method mask - cache IpAllow::match() call
   uint32_t acl_method_mask;
 

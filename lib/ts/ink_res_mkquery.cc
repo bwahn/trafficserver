@@ -502,7 +502,7 @@ ns_name_ntop(const u_char *src, char *dst, size_t dstsiz)
 	return (dn - dst);
 }
 
-DNSHostQueryStyle
+HostResStyle
 ats_res_calc_style(int family, DNSFamilyPreferenceOrder order)
 {
   bool v4 = false, v6 = false;
@@ -512,16 +512,16 @@ ats_res_calc_style(int family, DNSFamilyPreferenceOrder order)
     DNSFamilyPreference p = order[i];
     if (DNS_PREFER_CLIENT == p) p = client; // CLIENT -> actual value
     if (DNS_PREFER_IPV4 == p) {
-      if (v6) return DNS_HOST_QUERY_IPV6;
+      if (v6) return HOST_RES_IPV6;
       else v4 = true;
     } else if (DNS_PREFER_IPV6 == p) {
-      if (v4) return DNS_HOST_QUERY_IPV4;
+      if (v4) return HOST_RES_IPV4;
       else v6 = true;
     } else {
       break;
     }
   }
-  if (v4) return DNS_HOST_QUERY_IPV4_ONLY;
-  else if (v6) return DNS_HOST_QUERY_IPV6_ONLY;
-  return DNS_HOST_QUERY_NONE;
+  if (v4) return HOST_RES_IPV4_ONLY;
+  else if (v6) return HOST_RES_IPV6_ONLY;
+  return HOST_RES_NONE;
 }

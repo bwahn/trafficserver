@@ -583,25 +583,25 @@ Ldelete:
   return false;
 }
 
-inline DNSHostQueryStyle
+inline HostResStyle
 calc_hq_style_for(sockaddr const* ip) {
-  return ats_is_ip6(ip) ? DNS_HOST_QUERY_IPV6_ONLY : DNS_HOST_QUERY_IPV4_ONLY;
+  return ats_is_ip6(ip) ? HOST_RES_IPV6_ONLY : HOST_RES_IPV4_ONLY;
 }
 
-inline DNSHostQueryStyle
+inline HostResStyle
 calc_hq_style_for(HostDBMark mark) {
-  return HOSTDB_MARK_IPV4 == mark ? DNS_HOST_QUERY_IPV4_ONLY
-    : HOSTDB_MARK_IPV6 == mark ? DNS_HOST_QUERY_IPV6_ONLY
-    : DNS_HOST_QUERY_NONE
+  return HOSTDB_MARK_IPV4 == mark ? HOST_RES_IPV4_ONLY
+    : HOSTDB_MARK_IPV6 == mark ? HOST_RES_IPV6_ONLY
+    : HOST_RES_NONE
     ;
 }
 
 inline HostDBMark
-calc_db_mark(DNSHostQueryStyle style) {
+calc_db_mark(HostResStyle style) {
   HostDBMark zret = HOSTDB_MARK_GENERIC;
-  if (DNS_HOST_QUERY_IPV4 == style || DNS_HOST_QUERY_IPV4_ONLY == style)
+  if (HOST_RES_IPV4 == style || HOST_RES_IPV4_ONLY == style)
     zret = HOSTDB_MARK_IPV4;
-  else if (DNS_HOST_QUERY_IPV6 == style || DNS_HOST_QUERY_IPV6_ONLY == style)
+  else if (HOST_RES_IPV6 == style || HOST_RES_IPV6_ONLY == style)
     zret = HOSTDB_MARK_IPV6;
   return zret;
 }
@@ -710,7 +710,7 @@ HostDBContinuation::insert(unsigned int attl)
 //
 Action *
 HostDBProcessor::getby(Continuation * cont,
-                       const char *hostname, int len, sockaddr const* ip, bool aforce_dns, DNSHostQueryStyle query_style, int dns_lookup_timeout)
+                       const char *hostname, int len, sockaddr const* ip, bool aforce_dns, HostResStyle query_style, int dns_lookup_timeout)
 {
   HostDBMD5 md5;
   EThread *thread = this_ethread();
@@ -726,7 +726,7 @@ HostDBProcessor::getby(Continuation * cont,
 
   HOSTDB_INCREMENT_DYN_STAT(hostdb_total_lookups_stat);
 
-  Debug("amc", "HostDB get with query style %s", DNS_HOST_QUERY_STYLE_STRING[query_style]);
+  Debug("amc", "HostDB get with query style %s", HOST_RES_STYLE_STRING[query_style]);
 
   if ((!hostdb_enable || (hostname && !*hostname)) || (hostdb_disable_reverse_lookup && ip)) {
     MUTEX_TRY_LOCK(lock, cont->mutex, thread);
@@ -945,7 +945,7 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
 #endif // SPLIT_DNS
   md5.refresh();
 
-  Debug("amc", "HostDB host query for %.*s - %s:%d", md5.host_len, md5.host_name, DNS_HOST_QUERY_STYLE_STRING[opt.query_style], md5.db_mark);
+  Debug("amc", "HostDB host query for %.*s - %s:%d", md5.host_len, md5.host_name, HOST_RES_STYLE_STRING[opt.query_style], md5.db_mark);
 
   // Attempt to find the result in-line, for level 1 hits
   if (!force_dns) {
@@ -1368,14 +1368,14 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
       rr = !failed && (e->srv_hosts.getCount() > 0);
     } else if (!failed) {
       rr = 0 != e->ent.h_addr_list[1];
-    } else if (HOSTDB_MARK_IPV4 == md5.db_mark && DNS_HOST_QUERY_IPV4 == hq_style) {
+    } else if (HOSTDB_MARK_IPV4 == md5.db_mark && HOST_RES_IPV4 == hq_style) {
       Debug("amc", "HostDB failed for IPv4, retrying with IPv6");
       md5.db_mark = HOSTDB_MARK_IPV6;
       this->refresh_MD5();
       SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
       thread->schedule_in(this, MUTEX_RETRY_DELAY);
       return EVENT_CONT;
-    } else if (HOSTDB_MARK_IPV6 == md5.db_mark && DNS_HOST_QUERY_IPV6 == hq_style) {
+    } else if (HOSTDB_MARK_IPV6 == md5.db_mark && HOST_RES_IPV6 == hq_style) {
       Debug("amc", "HostDB failed for IPv6, retrying with IPv4");
       md5.db_mark = HOSTDB_MARK_IPV4;
       this->refresh_MD5();
@@ -1383,7 +1383,7 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
       thread->schedule_in(this, MUTEX_RETRY_DELAY);
       return EVENT_CONT;
     } else {
-      Debug("amc", "HostDB lookup failed mark=%d hq_style=%s", md5.db_mark, DNS_HOST_QUERY_STYLE_STRING[hq_style]);
+      Debug("amc", "HostDB lookup failed mark=%d hq_style=%s", md5.db_mark, HOST_RES_STYLE_STRING[hq_style]);
     }
 
     ttl = failed ? 0 : e->ttl / 60;

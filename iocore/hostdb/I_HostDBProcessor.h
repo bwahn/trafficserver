@@ -429,9 +429,9 @@ struct HostDBProcessor: public Processor
     int port; ///< Target service port (default 0 -> don't care)
     int flags; ///< Processing flags (default HOSTDB_DO_NOT_FORCE_DNS)
     int timeout; ///< Timeout value (default 0 -> default timeout)
-    DNSHostQueryStyle query_style; ///< How to query host (default DNS_HOST_QUERY_IPV4)
+    HostResStyle query_style; ///< How to query host (default HOST_RES_IPV4)
 
-    Options() : port(0), flags(HOSTDB_DO_NOT_FORCE_DNS), timeout(0), query_style(DNS_HOST_QUERY_IPV4)
+    Options() : port(0), flags(HOSTDB_DO_NOT_FORCE_DNS), timeout(0), query_style(HOST_RES_IPV4)
     { }
 
     /// Set the flags.
@@ -460,7 +460,7 @@ struct HostDBProcessor: public Processor
   /** Lookup Hostinfo by addr */
   Action *getbyaddr_re(Continuation * cont, sockaddr const* aip)
   {
-    return getby(cont, NULL, 0, 0, aip, DNS_HOST_QUERY_NONE, false);
+    return getby(cont, NULL, 0, 0, aip, HOST_RES_NONE, false);
   }
 
 #if 0
@@ -514,7 +514,7 @@ private:
     Continuation * cont,
     const char *hostname, int len,
     sockaddr const* ip,
-    bool aforce_dns, DNSHostQueryStyle query_style, int timeout
+    bool aforce_dns, HostResStyle query_style, int timeout
   );
 public:
   /** Set something.

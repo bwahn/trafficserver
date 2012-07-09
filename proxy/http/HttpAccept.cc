@@ -71,7 +71,7 @@ HttpAccept::mainEvent(int event, void *data)
 
     new_session->new_connection(netvc, backdoor);
 
-    Debug("amc", "New connection with host query style %s", DNS_HOST_QUERY_STYLE_STRING[new_session->res_query_style]);
+    Debug("amc", "New connection with host query style %s", HOST_RES_STYLE_STRING[new_session->res_query_style]);
 
     return EVENT_CONT;
   }
