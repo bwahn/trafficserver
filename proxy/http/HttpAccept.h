@@ -80,7 +80,7 @@ namespace detail {
     /// Host address resolution preference order.
     DNSFamilyPreferenceOrder host_res_preference;
     /// Set the host query preference.
-    self& setHostResPreference(DNSFamilyPreferenceOrder);
+    self& setHostResPreference(DNSFamilyPreferenceOrder const);
   };
 
   inline HttpAcceptOptions::HttpAcceptOptions()
@@ -131,7 +131,7 @@ namespace detail {
   }
 
   inline HttpAcceptOptions&
-  HttpAcceptOptions::setHostResPreference(DNSFamilyPreferenceOrder order) {
+  HttpAcceptOptions::setHostResPreference(DNSFamilyPreferenceOrder const order) {
     memcpy(host_res_preference, order, sizeof(host_res_preference));
     return *this;
   }

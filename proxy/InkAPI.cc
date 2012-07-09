@@ -8274,4 +8274,51 @@ TSPortDescriptorAccept(TSPortDescriptor descp, TSCont contp)
   return start_HttpProxyPort(*port, 0 /* nthreads */) ? TS_SUCCESS : TS_ERROR;
 }
 
+TSReturnCode
+TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style)
+{
+  if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
+    return TS_ERROR;
+
+  HttpSM *sm = (HttpSM *) txnp;
+  if (!sm->ua_session)
+    return TS_ERROR;
+
+  if (style)
+    *style = static_cast<TSHostResStyle>(sm->ua_session->res_query_style);
+
+  return TS_SUCCESS;
+}
+
+TSReturnCode
+TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style)
+{
+  if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
+    return TS_ERROR;
+
+  HttpSM *sm = (HttpSM *) txnp;
+  if (!sm->ua_session)
+    return TS_ERROR;
+  sm->ua_session->res_query_style = static_cast<DNSHostQueryStyle>(style);
+  return TS_SUCCESS;
+}
+
+TSReturnCode
+TSHttpTxnSetHostResPreference(TSHttpTxn txnp, TSHostResPreferenceOrder order)
+{
+  if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
+    return TS_ERROR;
+
+  HttpSM *sm = (HttpSM *) txnp;
+  if (!sm->ua_session) return TS_ERROR;
+
+  NetVConnection* vc = sm->ua_session->get_netvc();
+  if (!vc) return TS_ERROR;
+
+  sockaddr const* ip = vc->get_remote_addr();
+  if (!ats_is_ip(ip)) return TS_ERROR;
+
+  sm->ua_session->res_query_style = static_cast<DNSHostQueryStyle>(ats_res_calc_style(ip->sa_family, reinterpret_cast<DNSFamilyPreference*>(order)));
+  return TS_SUCCESS;
+}
 #endif //TS_NO_API
