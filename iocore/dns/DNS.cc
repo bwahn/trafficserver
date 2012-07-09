@@ -57,20 +57,12 @@ char *dns_local_ipv4 = NULL;
 int dns_thread = 0;
 int dns_prefer_ipv6 = 0;
 namespace {
-  inline bool prefer_ipv6_p() { return 0 != dns_prefer_ipv6; }
-  inline int preferred_query_type() { return prefer_ipv6_p() ? T_AAAA : T_A; }
   // Currently only used for A and AAAA.
   inline char const* QtypeName(int qtype) {
     return T_AAAA == qtype ? "AAAA" : T_A == qtype ? "A" : "*";
   }
-  inline void set_loopback(sockaddr* addr) {
-    if (prefer_ipv6_p())
-      ats_ip6_set(addr, in6addr_loopback, htons(DOMAIN_SERVICE_PORT));
-    else
-      ats_ip4_set(addr, htonl(INADDR_LOOPBACK), htons(DOMAIN_SERVICE_PORT));
-  }
-  inline void set_loopback(IpEndpoint* ip) {
-    set_loopback(&ip->sa);
+  inline bool is_addr_query(int qtype) {
+    return qtype == T_A || qtype == T_AAAA;
   }
 }
 
@@ -114,10 +106,6 @@ ink_get16(const uint8_t *src) {
 
 void HostEnt::free() {
   dnsBufAllocator.free(this);
-}
-
-inline bool is_addr_query(int qtype) {
-  return qtype == T_A || qtype == T_AAAA;
 }
 
 void
@@ -470,14 +458,12 @@ DNSHandler::open_con(sockaddr const* target, bool failed, int icon)
 
 void
 DNSHandler::validate_ip() {
-  if (!ats_is_ip(&ip.sa)) {
+  if (!ip.isValid()) {
     // Invalid, switch to default.
     // seems that res_init always sets m_res.nscount to at least 1!
     if (!m_res->nscount || !ats_ip_copy(&ip.sa, &m_res->nsaddr_list[0].sa)) {
-      Warning("bad nameserver config, fallback to %s loopback",
-        prefer_ipv6_p() ? "IPv6" : "IPv4"
-      );
-      set_loopback(&ip);
+      Warning("bad nameserver config, fallback to loopback");
+      ip.setToLoopback(AF_INET);
     }
   }
 }
@@ -583,7 +569,7 @@ DNSHandler::retry_named(int ndx, ink_hrtime t, bool reopen)
 
   char buffer[MAX_DNS_PACKET_LEN];
   Debug("dns", "trying to resolve '%s' from DNS connection, ndx %d", try_server_names[try_servers], ndx);
-  int r = _ink_res_mkquery(m_res, try_server_names[try_servers], preferred_query_type(), buffer);
+  int r = _ink_res_mkquery(m_res, try_server_names[try_servers], T_A, buffer);
   try_servers = (try_servers + 1) % SIZE(try_server_names);
   ink_assert(r >= 0);
   if (r >= 0) {                 // looking for a bounce
@@ -606,7 +592,7 @@ DNSHandler::try_primary_named(bool reopen)
 
     last_primary_retry = t;
     Debug("dns", "trying to resolve '%s' from primary DNS connection", try_server_names[try_servers]);
-    int r = _ink_res_mkquery(m_res, try_server_names[try_servers], preferred_query_type(), buffer);
+    int r = _ink_res_mkquery(m_res, try_server_names[try_servers], T_A, buffer);
     // if try_server_names[] is not full, round-robin within the
     // filled entries.
     if (local_num_entries < DEFAULT_NUM_TRY_SERVER)
@@ -658,7 +644,7 @@ DNSHandler::failover()
       ats_ip_ntop(&target.sa, buff2, sizeof(buff2))
     );
 
-    if (!ats_is_ip(&target.sa)) set_loopback(&target.sa);
+    if (!target.isValid()) target.setToLoopback(AF_INET);
 
     open_con(&target.sa, true, name_server);
     if (n_con <= name_server)
