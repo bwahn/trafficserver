@@ -8312,7 +8312,7 @@ TSHttpTxnBackgroundFillStarted(TSHttpTxn txnp)
 }
 
 TSReturnCode
-TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style)
+TSHttpTxnHostResStyleGet(TSHttpTxn txnp, TSHostResStyle* style)
 {
   if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
     return TS_ERROR;
@@ -8328,7 +8328,7 @@ TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style)
 }
 
 TSReturnCode
-TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style)
+TSHttpTxnHostResStyleSet(TSHttpTxn txnp, TSHostResStyle style)
 {
   if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
     return TS_ERROR;
@@ -8341,7 +8341,7 @@ TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style)
 }
 
 TSReturnCode
-TSHttpTxnSetHostResPreference(TSHttpTxn txnp, TSHostResPreferenceOrder order)
+TSHttpTxnHostResPreferenceSet(TSHttpTxn txnp, TSHostResPreferenceOrder order)
 {
   if (sdk_sanity_check_txn(txnp) != TS_SUCCESS)
     return TS_ERROR;

@@ -3230,28 +3230,28 @@ extern "C"
       @param txnp [in] Transaction.
       @param style [out] Destination storage for retreived style value.
   */
-  tsapi TSReturnCode TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style);
+  tsapi TSReturnCode TSHttpTxnHostResStyleGet(TSHttpTxn txnp, TSHostResStyle* style);
 
   /** Set the host resolution @a style for a transaction.
       @param txnp [in] Transaction.
       @param style ///< [in] New style.
   */
-  tsapi TSReturnCode TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style);
+  tsapi TSReturnCode TSHttpTxnHostResStyleSet(TSHttpTxn txnp, TSHostResStyle style);
 
-  /** Set the host resolution style for a transaction from a preference ordering.
+  /** Set the host resolution style from a preference ordering.
 
-      @a order is reduced to a @c TSHostRestStyle based on the
-      family of the client connection in the transaction and then @c
-      TSHttpTxnSetHostResStyle is invoked with that value. This is
-      provided as a convenience for plugins that work with preferences
+      @a order is reduced to a @c TSHostResStyle based on the family
+      of the client connection in the transaction. That value is
+      passed to @c TSHttpTxnSetHostResStyle. This is provided as a
+      convenience for plugins that want to work with preferences
       instead of styles.
 
       @param txnp [in] Transaction.
       @param order [in] Preference ordering.
 
-      @see TSHttpTxnSetHostResStyle
+      @see TSHttpTxnHostResStyleSet
   */
-  tsapi TSReturnCode TSHttpTxnSetHostResPreference(TSHttpTxn txnp, TSHostResPreferenceOrder const order);
+  tsapi TSReturnCode TSHttpTxnHostResPreferenceSet(TSHttpTxn txnp, TSHostResPreferenceOrder const order);
 
   /* Set or get various overridable configurations, for a transaction. This should
     probably be done as early as possible, e.g. TS_HTTP_READ_REQUEST_HDR_HOOK.
