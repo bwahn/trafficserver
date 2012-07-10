@@ -42,6 +42,10 @@ enum HostDBMark {
   HOSTDB_MARK_IPV6, ///< IPv6 / T_AAAA
   HOSTDB_MARK_SRV, ///< Service / T_SRV
 };
+/** Convert a HostDB @a mark to a string.
+    @return A static string.
+ */
+extern char const* string_for(HostDBMark mark);
 
 inline unsigned int HOSTDB_CLIENT_IP_HASH(
   sockaddr const* lhs,

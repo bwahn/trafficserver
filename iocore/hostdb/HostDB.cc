@@ -72,8 +72,7 @@ ClassAllocator<HostDBContinuation> hostDBContAllocator("hostDBContAllocator");
 
 // Static configuration information
 
-HostDBCache
-  hostDB;
+HostDBCache hostDB;
 
 #ifdef NON_MODULAR
 static  Queue <HostDBContinuation > remoteHostDBQueue[MULTI_CACHE_PARTITIONS];
@@ -121,6 +120,29 @@ hostdb_cont_free(HostDBContinuation * cont)
   hostDBContAllocator.free(cont);
 }
 
+/* Check whether a resolution fail should lead to a retry.
+   The @a mark argument is updated if appropriate.
+   @return @c true if @a mark was updated, @c false if no retry should be done.
+*/
+static inline bool
+check_for_retry(HostDBMark& mark, HostResStyle style) {
+  bool zret = true;
+  if (HOSTDB_MARK_IPV4 == mark && HOST_RES_IPV4 == style)
+    mark = HOSTDB_MARK_IPV6;
+  else if (HOSTDB_MARK_IPV6 == mark && HOST_RES_IPV6 == style)
+    mark = HOSTDB_MARK_IPV4;
+  else
+    zret = false;
+  return zret;
+}
+
+char const*
+string_for(HostDBMark mark) {
+  static char const* STRING[] = {
+    "Generic", "IPv4", "IPv6", "SRV"
+  };
+  return STRING[mark];
+}
 
 //
 // Function Prototypes
@@ -717,13 +739,6 @@ HostDBProcessor::getby(Continuation * cont,
   EThread *thread = this_ethread();
   ProxyMutex *mutex = thread->mutex;
   ip_text_buffer ipb;
-  HostDBContinuation::Options opt;
-
-  md5.host_name = hostname;
-  md5.host_len = hostname ? (len ? len : strlen(hostname)) : 0;
-  md5.ip.assign(ip);
-  md5.port = ip ? ats_ip_port_host_order(ip) : 0;
-  md5.db_mark = db_mark_for(host_res_style);
 
   HOSTDB_INCREMENT_DYN_STAT(hostdb_total_lookups_stat);
 
@@ -736,6 +751,13 @@ HostDBProcessor::getby(Continuation * cont,
     cont->handleEvent(EVENT_HOST_DB_LOOKUP, NULL);
     return ACTION_RESULT_DONE;
   }
+
+  // Load the MD5 data.
+  md5.host_name = hostname;
+  md5.host_len = hostname ? (len ? len : strlen(hostname)) : 0;
+  md5.ip.assign(ip);
+  md5.port = ip ? ats_ip_port_host_order(ip) : 0;
+  md5.db_mark = db_mark_for(host_res_style);
 #ifdef SPLIT_DNS
   if (hostname && SplitDNSConfig::isSplitDNSEnabled()) {
     const char *scan = hostname;
@@ -749,32 +771,43 @@ HostDBProcessor::getby(Continuation * cont,
     }
   }
 #endif // SPLIT_DNS
-
   md5.refresh();
 
   // Attempt to find the result in-line, for level 1 hits
   //
   if (!aforce_dns) {
-    // find the partition lock
-    //
-    // TODO: Could we reuse the "mutex" above safely? I think so, but not sure.
-    ProxyMutex *bmutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
-    MUTEX_TRY_LOCK(lock, bmutex, thread);
-    MUTEX_TRY_LOCK(lock2, cont->mutex, thread);
+    bool loop = true;
+    while (loop) {
+      loop = false; // leave unless explicitly set for retry.
 
-    // If we can get the lock and a level 1 probe succeeds, return
-    //
-    if (lock && lock2) {
-      HostDBInfo *r = probe(bmutex, md5, aforce_dns);
-      if (r) {
-        Debug("hostdb", "immediate answer for %s",
-          hostname ? hostname 
-          : ats_is_ip(ip) ? ats_ip_ntop(ip, ipb, sizeof ipb)
-          : "<null>"
-        );
-        HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
-        reply_to_cont(cont, r);
-        return ACTION_RESULT_DONE;
+      // find the partition lock
+      //
+      // TODO: Could we reuse the "mutex" above safely? I think so but not sure.
+      ProxyMutex *bmutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
+      MUTEX_TRY_LOCK(lock, bmutex, thread);
+      MUTEX_TRY_LOCK(lock2, cont->mutex, thread);
+
+      if (lock && lock2) {
+        // If we can get the lock and a level 1 probe succeeds, return
+        HostDBInfo *r = probe(bmutex, md5, aforce_dns);
+        if (r) {
+          if (r->failed() && hostname)
+            loop = check_for_retry(md5.db_mark, host_res_style);
+          if (!loop) {
+            // No retry -> final result. Return it.
+            Debug("hostdb", "immediate answer for %s",
+                  hostname ? hostname 
+                  : ats_is_ip(ip) ? ats_ip_ntop(ip, ipb, sizeof ipb)
+                  : "<null>"
+              );
+            HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
+            reply_to_cont(cont, r);
+            return ACTION_RESULT_DONE;
+          } else {
+            md5.refresh();
+            Debug("amc", "HostDB immediate fail, retrying with alternate %s", string_for(md5.db_mark));
+          }
+        }
       }
     }
   }
@@ -788,6 +821,7 @@ Lretry:
   // Otherwise, create a continuation to do a deeper probe in the background
   //
   HostDBContinuation *c = hostDBContAllocator.alloc();
+  HostDBContinuation::Options opt;
   opt.timeout = dns_lookup_timeout;
   opt.force_dns = aforce_dns;
   opt.cont = cont;
@@ -950,18 +984,30 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
 
   // Attempt to find the result in-line, for level 1 hits
   if (!force_dns) {
-    // find the partition lock
-    ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
-    MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
+    bool loop = true;
+    while (loop) {
+      loop = false; // break unless explicitly set for retry.
+      // find the partition lock
+      ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
+      MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
 
-    // If we can get the lock and a level 1 probe succeeds, return
-    if (lock) {
-      HostDBInfo *r = probe(bucket_mutex, md5, false);
-      if (r) {
-        Debug("hostdb", "immediate answer for %.*s", md5.host_len, md5.host_name);
-        HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
-        (cont->*process_hostdb_info) (r);
-        return ACTION_RESULT_DONE;
+      if (lock) {
+        // If we can get the lock do a level 1 probe for immediate result.
+        HostDBInfo *r = probe(bucket_mutex, md5, false);
+        if (r) {
+          if (r->failed()) // fail, see if we should retry with alternate
+            loop = check_for_retry(md5.db_mark, opt.host_res_style);
+          if (!loop) {
+            // No retry -> final result. Return it.
+            Debug("hostdb", "immediate answer for %.*s", md5.host_len, md5.host_name);
+            HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
+            (cont->*process_hostdb_info) (r);
+            return ACTION_RESULT_DONE;
+          } else {
+            md5.refresh(); // Update for retry.
+            Debug("amc", "HostDB immediate fail, retrying with %s", string_for(md5.db_mark));
+          }
+        }
       }
     }
   }
@@ -1506,22 +1552,12 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
 #endif
 
     // Check for IP family failover
-    if (failed) {
-      if (HOSTDB_MARK_IPV4 == md5.db_mark && HOST_RES_IPV4 == host_res_style) {
-        Debug("amc", "HostDB failed for IPv4, retrying with IPv6");
-        md5.db_mark = HOSTDB_MARK_IPV6;
-        this->refresh_MD5();
-        SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
-        thread->schedule_in(this, MUTEX_RETRY_DELAY);
-        return EVENT_CONT;
-      } else if (HOSTDB_MARK_IPV6 == md5.db_mark && HOST_RES_IPV6 == host_res_style) {
-        Debug("amc", "HostDB failed for IPv6, retrying with IPv4");
-        md5.db_mark = HOSTDB_MARK_IPV4;
-        this->refresh_MD5();
-        SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
-        thread->schedule_in(this, MUTEX_RETRY_DELAY);
-        return EVENT_CONT;
-      }
+    if (failed && check_for_retry(md5.db_mark, host_res_style)) {
+      Debug("amc", "HostDB failed retrying with alternate family %s", string_for(md5.db_mark));
+      this->refresh_MD5();
+      SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
+      thread->schedule_in(this, MUTEX_RETRY_DELAY);
+      return EVENT_CONT;
     }
     // try to callback the user
     //
