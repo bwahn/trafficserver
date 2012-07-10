@@ -1995,7 +1995,7 @@ lookup:
 void
 HttpSM::process_hostdb_info(HostDBInfo * r)
 {
-  if (r) {
+  if (r && !r->failed()) {
     HostDBInfo *rr = NULL;
     t_state.dns_info.lookup_success = true;
 

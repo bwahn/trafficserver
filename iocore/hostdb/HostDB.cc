@@ -483,7 +483,7 @@ void
 HostDBContinuation::refresh_MD5() {
   ProxyMutex* old_bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
   // We're not pending DNS anymore.
-  hostDB.pending_dns_for_hash(md5.hash).remove(this);
+  remove_trigger_pending_dns();
   md5.refresh();
   // Update the mutex if it's from the bucket.
   // Some call sites modify this after calling @c init so need to check.
@@ -1369,20 +1369,6 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
       rr = !failed && (e->srv_hosts.getCount() > 0);
     } else if (!failed) {
       rr = 0 != e->ent.h_addr_list[1];
-    } else if (HOSTDB_MARK_IPV4 == md5.db_mark && HOST_RES_IPV4 == host_res_style) {
-      Debug("amc", "HostDB failed for IPv4, retrying with IPv6");
-      md5.db_mark = HOSTDB_MARK_IPV6;
-      this->refresh_MD5();
-      SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
-      thread->schedule_in(this, MUTEX_RETRY_DELAY);
-      return EVENT_CONT;
-    } else if (HOSTDB_MARK_IPV6 == md5.db_mark && HOST_RES_IPV6 == host_res_style) {
-      Debug("amc", "HostDB failed for IPv6, retrying with IPv4");
-      md5.db_mark = HOSTDB_MARK_IPV4;
-      this->refresh_MD5();
-      SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
-      thread->schedule_in(this, MUTEX_RETRY_DELAY);
-      return EVENT_CONT;
     } else {
       Debug("amc", "HostDB lookup failed mark=%d host_res_style=%s", md5.db_mark, HOST_RES_STYLE_STRING[host_res_style]);
     }
@@ -1519,6 +1505,24 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
       do_put_response(m, r, NULL);
 #endif
 
+    // Check for IP family failover
+    if (failed) {
+      if (HOSTDB_MARK_IPV4 == md5.db_mark && HOST_RES_IPV4 == host_res_style) {
+        Debug("amc", "HostDB failed for IPv4, retrying with IPv6");
+        md5.db_mark = HOSTDB_MARK_IPV6;
+        this->refresh_MD5();
+        SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
+        thread->schedule_in(this, MUTEX_RETRY_DELAY);
+        return EVENT_CONT;
+      } else if (HOSTDB_MARK_IPV6 == md5.db_mark && HOST_RES_IPV6 == host_res_style) {
+        Debug("amc", "HostDB failed for IPv6, retrying with IPv4");
+        md5.db_mark = HOSTDB_MARK_IPV4;
+        this->refresh_MD5();
+        SET_CONTINUATION_HANDLER(this, (HostDBContHandler) & HostDBContinuation::probeEvent);
+        thread->schedule_in(this, MUTEX_RETRY_DELAY);
+        return EVENT_CONT;
+      }
+    }
     // try to callback the user
     //
     if (action.continuation) {
