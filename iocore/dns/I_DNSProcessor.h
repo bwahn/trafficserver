@@ -78,7 +78,7 @@ struct DNSProcessor: public Processor
     /// Query timeout value.
     /// Default: @c DEFAULT_DNS_TIMEOUT (or as set in records.config)
     int timeout; ///< Timeout value for request.
-    /// IP family preference.
+    /// Host resolution style.
     /// Default: IPv4, IPv6 ( @c HOST_RES_IPV4 )
     HostResStyle host_res_style;
 
@@ -136,10 +136,10 @@ struct DNSProcessor: public Processor
 
   /** Internal implementation for all getXbyY methods.
       For host resolution queries pass @c T_A for @a type. It will be adjusted
-      as needed based on @a opt.family_preference.
+      as needed based on @a opt.host_res_style.
 
       For address resolution ( @a type is @c T_PTR ), @a x should be a
-      @c sockaddr case to  @c char @c const* .
+      @c sockaddr cast to  @c char @c const* .
    */
   Action *getby(const char *x, int len, int type, Continuation *cont, Options const& opt);
 
