@@ -776,10 +776,8 @@ HostDBProcessor::getby(Continuation * cont,
   // Attempt to find the result in-line, for level 1 hits
   //
   if (!aforce_dns) {
-    bool loop = true;
-    while (loop) {
-      loop = false; // leave unless explicitly set for retry.
-
+    bool loop = false; // Only loop on explicit set for retry.
+    do {
       // find the partition lock
       //
       // TODO: Could we reuse the "mutex" above safely? I think so but not sure.
@@ -803,13 +801,12 @@ HostDBProcessor::getby(Continuation * cont,
             HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
             reply_to_cont(cont, r);
             return ACTION_RESULT_DONE;
-          } else {
-            md5.refresh();
-            Debug("amc", "HostDB immediate fail, retrying with alternate %s", string_for(md5.db_mark));
           }
+          md5.refresh();
+          Debug("amc", "HostDB immediate fail, retrying with alternate %s", string_for(md5.db_mark));
         }
       }
-    }
+    } while (loop);
   }
   Debug("hostdb", "delaying force %d answer for %s", aforce_dns,
     hostname ? hostname 
@@ -984,9 +981,8 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
 
   // Attempt to find the result in-line, for level 1 hits
   if (!force_dns) {
-    bool loop = true;
-    while (loop) {
-      loop = false; // break unless explicitly set for retry.
+    bool loop = false; // loop only on explicit set for retry
+    do {
       // find the partition lock
       ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
       MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
@@ -1003,13 +999,12 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
             HOSTDB_INCREMENT_DYN_STAT(hostdb_total_hits_stat);
             (cont->*process_hostdb_info) (r);
             return ACTION_RESULT_DONE;
-          } else {
-            md5.refresh(); // Update for retry.
-            Debug("amc", "HostDB immediate fail, retrying with %s", string_for(md5.db_mark));
           }
+          md5.refresh(); // Update for retry.
+          Debug("amc", "HostDB immediate fail, retrying with %s", string_for(md5.db_mark));
         }
       }
-    }
+    } while (loop);
   }
 
   Debug("hostdb", "delaying force %d answer for %.*s [timeout %d]", force_dns, md5.host_len, md5.host_name, opt.timeout);

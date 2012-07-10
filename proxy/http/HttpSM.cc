@@ -1978,7 +1978,7 @@ lookup:
   }
   opt.flags = (t_state.cache_info.directives.does_client_permit_dns_storing) ? HostDBProcessor::HOSTDB_DO_NOT_FORCE_DNS : HostDBProcessor::HOSTDB_FORCE_DNS_RELOAD;
   opt.port = server_port;
-  opt.host_res_style = ua_session->res_host_res_style;
+  opt.host_res_style = ua_session->host_res_style;
 
   Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this, (process_hostdb_info_pfn) & HttpSM::process_hostdb_info, &new_host[0], 0, opt);
 
@@ -3783,7 +3783,7 @@ HttpSM::do_hostdb_lookup()
       : HostDBProcessor::HOSTDB_FORCE_DNS_RELOAD
     ;
     opt.timeout = (t_state.api_txn_dns_timeout_value != -1) ? t_state.api_txn_dns_timeout_value : 0;
-    opt.host_res_style = ua_session->res_host_res_style;
+    opt.host_res_style = ua_session->host_res_style;
 
     Action *dns_lookup_action_handle = hostDBProcessor.getbyname_imm(this, (process_hostdb_info_pfn) & HttpSM::process_hostdb_info, t_state.dns_info.lookup_name, 0, opt);
 
