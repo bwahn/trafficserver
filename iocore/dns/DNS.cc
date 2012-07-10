@@ -1124,20 +1124,6 @@ dns_result(DNSHandler *h, DNSEntry *e, HostEnt *ent, bool retry) {
       --(e->retries);
       write_dns(h);
       return;
-# if 0
-    } else if (e->qtype == T_AAAA && HOST_RES_IPV6 == e->host_res_style) {
-      Debug("dns", "Trying A after AAAA failure for %s", e->qname);
-      e->retries = dns_retries;
-      e->qtype = T_A;
-      write_dns(h);
-      return;
-    } else if (e->qtype == T_A && HOST_RES_IPV4 == e->host_res_style) {
-      Debug("dns", "Trying AAAA after A failure for %s", e->qname);
-      e->retries = dns_retries;
-      e->qtype = T_AAAA;
-      write_dns(h);
-      return;
-# endif
     } else if (e->domains && *e->domains) {
       do {
         Debug("dns", "domain extending %s", e->qname);

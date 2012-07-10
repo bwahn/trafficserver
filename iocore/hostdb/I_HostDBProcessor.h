@@ -429,9 +429,9 @@ struct HostDBProcessor: public Processor
     int port; ///< Target service port (default 0 -> don't care)
     int flags; ///< Processing flags (default HOSTDB_DO_NOT_FORCE_DNS)
     int timeout; ///< Timeout value (default 0 -> default timeout)
-    HostResStyle query_style; ///< How to query host (default HOST_RES_IPV4)
+    HostResStyle host_res_style; ///< How to query host (default HOST_RES_IPV4)
 
-    Options() : port(0), flags(HOSTDB_DO_NOT_FORCE_DNS), timeout(0), query_style(HOST_RES_IPV4)
+    Options() : port(0), flags(HOSTDB_DO_NOT_FORCE_DNS), timeout(0), host_res_style(HOST_RES_IPV4)
     { }
 
     /// Set the flags.
@@ -514,7 +514,7 @@ private:
     Continuation * cont,
     const char *hostname, int len,
     sockaddr const* ip,
-    bool aforce_dns, HostResStyle query_style, int timeout
+    bool aforce_dns, HostResStyle host_res_style, int timeout
   );
 public:
   /** Set something.

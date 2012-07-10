@@ -486,6 +486,7 @@ HostDBContinuation::refresh_MD5() {
   hostDB.pending_dns_for_hash(md5.hash).remove(this);
   md5.refresh();
   // Update the mutex if it's from the bucket.
+  // Some call sites modify this after calling @c init so need to check.
   if (old_bucket_mutex == mutex)
     mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
 }
@@ -584,12 +585,12 @@ Ldelete:
 }
 
 inline HostResStyle
-calc_host_res_style_for(sockaddr const* ip) {
+host_res_style_for(sockaddr const* ip) {
   return ats_is_ip6(ip) ? HOST_RES_IPV6_ONLY : HOST_RES_IPV4_ONLY;
 }
 
 inline HostResStyle
-calc_host_res_style_for(HostDBMark mark) {
+host_res_style_for(HostDBMark mark) {
   return HOSTDB_MARK_IPV4 == mark ? HOST_RES_IPV4_ONLY
     : HOSTDB_MARK_IPV6 == mark ? HOST_RES_IPV6_ONLY
     : HOST_RES_NONE
@@ -597,7 +598,7 @@ calc_host_res_style_for(HostDBMark mark) {
 }
 
 inline HostDBMark
-calc_db_mark(HostResStyle style) {
+db_mark_for(HostResStyle style) {
   HostDBMark zret = HOSTDB_MARK_GENERIC;
   if (HOST_RES_IPV4 == style || HOST_RES_IPV4_ONLY == style)
     zret = HOSTDB_MARK_IPV4;
@@ -607,7 +608,7 @@ calc_db_mark(HostResStyle style) {
 }
 
 inline HostDBMark
-calc_db_mark(sockaddr const* ip) {
+db_mark_for(sockaddr const* ip) {
   return ats_is_ip6(ip) ? HOSTDB_MARK_IPV6 : HOSTDB_MARK_IPV4;
 }
 
@@ -663,7 +664,7 @@ probe(ProxyMutex *mutex, HostDBMD5 const& md5, bool ignore_timeout)
         if (!is_dotted_form_hostname(md5.host_name)) {
           HostDBContinuation *c = hostDBContAllocator.alloc();
           HostDBContinuation::Options copt;
-          copt.host_res_style = calc_host_res_style_for(r->ip());
+          copt.host_res_style = host_res_style_for(r->ip());
           c->init(md5, copt);
           c->do_dns();
         }
@@ -710,7 +711,7 @@ HostDBContinuation::insert(unsigned int attl)
 //
 Action *
 HostDBProcessor::getby(Continuation * cont,
-                       const char *hostname, int len, sockaddr const* ip, bool aforce_dns, HostResStyle query_style, int dns_lookup_timeout)
+                       const char *hostname, int len, sockaddr const* ip, bool aforce_dns, HostResStyle host_res_style, int dns_lookup_timeout)
 {
   HostDBMD5 md5;
   EThread *thread = this_ethread();
@@ -722,11 +723,11 @@ HostDBProcessor::getby(Continuation * cont,
   md5.host_len = hostname ? (len ? len : strlen(hostname)) : 0;
   md5.ip.assign(ip);
   md5.port = ip ? ats_ip_port_host_order(ip) : 0;
-  md5.db_mark = calc_db_mark(query_style);
+  md5.db_mark = db_mark_for(host_res_style);
 
   HOSTDB_INCREMENT_DYN_STAT(hostdb_total_lookups_stat);
 
-  Debug("amc", "HostDB get with query style %s", HOST_RES_STYLE_STRING[query_style]);
+  Debug("amc", "HostDB get with query style %s", HOST_RES_STYLE_STRING[host_res_style]);
 
   if ((!hostdb_enable || (hostname && !*hostname)) || (hostdb_disable_reverse_lookup && ip)) {
     MUTEX_TRY_LOCK(lock, cont->mutex, thread);
@@ -790,7 +791,7 @@ Lretry:
   opt.timeout = dns_lookup_timeout;
   opt.force_dns = aforce_dns;
   opt.cont = cont;
-  opt.host_res_style = query_style;
+  opt.host_res_style = host_res_style;
   c->init(md5, opt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler) & HostDBContinuation::probeEvent);
 
@@ -823,7 +824,7 @@ HostDBProcessor::getbyname_re(Continuation * cont, const char *ahostname, int le
     if (force_dns)
       HOSTDB_INCREMENT_DYN_STAT(hostdb_re_dns_on_reload_stat);
   }
-  return getby(cont, ahostname, len, 0, force_dns, opt.query_style, opt.timeout);
+  return getby(cont, ahostname, len, 0, force_dns, opt.host_res_style, opt.timeout);
 }
 
 
@@ -930,7 +931,7 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
   md5.host_name = hostname;
   md5.host_len = hostname ? (len ? len : strlen(hostname)) : 0;
   md5.port = opt.port;
-  md5.db_mark = calc_db_mark(opt.query_style);
+  md5.db_mark = db_mark_for(opt.host_res_style);
 #ifdef SPLIT_DNS
   if (SplitDNSConfig::isSplitDNSEnabled()) {
     const char *scan = hostname;
@@ -945,7 +946,7 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
 #endif // SPLIT_DNS
   md5.refresh();
 
-  Debug("amc", "HostDB host query for %.*s - %s:%d", md5.host_len, md5.host_name, HOST_RES_STYLE_STRING[opt.query_style], md5.db_mark);
+  Debug("amc", "HostDB host query for %.*s - %s:%d", md5.host_len, md5.host_name, HOST_RES_STYLE_STRING[opt.host_res_style], md5.db_mark);
 
   // Attempt to find the result in-line, for level 1 hits
   if (!force_dns) {
@@ -973,7 +974,7 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
   copt.cont = cont;
   copt.force_dns = force_dns;
   copt.timeout = opt.timeout;
-  copt.host_res_style = opt.query_style;
+  copt.host_res_style = opt.host_res_style;
   c->init(md5, copt);
   SET_CONTINUATION_HANDLER(c, (HostDBContHandler) & HostDBContinuation::probeEvent);
 
@@ -1019,7 +1020,7 @@ HostDBProcessor::setby(const char *hostname, int len, sockaddr const* ip, HostDB
   md5.host_len = hostname ? (len ? len : strlen(hostname)) : 0;
   md5.ip.assign(ip);
   md5.port = ip ? ats_ip_port_host_order(ip) : 0;
-  md5.db_mark = calc_db_mark(ip);
+  md5.db_mark = db_mark_for(ip);
   md5.refresh();
 
   // Attempt to find the result in-line, for level 1 hits
@@ -1110,7 +1111,7 @@ HostDBProcessor::failed_connect_on_ip_for_name(Continuation * cont, sockaddr con
   md5.host_len = hostname ? (len ? len : strlen(hostname)) : 0;
   md5.ip.assign(ip);
   md5.port = ip ? ats_ip_port_host_order(ip) : 0;
-  md5.db_mark = calc_db_mark(ip);
+  md5.db_mark = db_mark_for(ip);
 #ifdef SPLIT_DNS
   SplitDNS *pSD = 0;
   if (hostname && SplitDNSConfig::isSplitDNSEnabled()) {
@@ -1836,7 +1837,7 @@ HostDBContinuation::do_dns()
   if (set_check_pending_dns()) {
     DNSProcessor::Options opt;
     opt.timeout = dns_lookup_timeout;
-    opt.host_res_style = calc_host_res_style_for(md5.db_mark);
+    opt.host_res_style = host_res_style_for(md5.db_mark);
     SET_HANDLER((HostDBContHandler) & HostDBContinuation::dnsEvent);
     if (is_byname()) {
       if (md5.dns_server)
@@ -1992,7 +1993,7 @@ get_hostinfo_ClusterFunction(ClusterHandler *ch, void *data, int len)
   md5.ip.assign(&msg->ip.sa);
   md5.port = ats_ip_port_host_order(&msg->ip.sa);
   md5.hash = msg->md5;
-  md5.db_mark = calc_db_mark(&msg->ip.sa);
+  md5.db_mark = db_mark_for(&msg->ip.sa);
 #ifdef SPLIT_DNS
   SplitDNS *pSD = 0;
   char *hostname = msg->name;
@@ -2019,7 +2020,7 @@ get_hostinfo_ClusterFunction(ClusterHandler *ch, void *data, int len)
      DNS servers
      ----------------------------------------- */
 
-  copt.host_res_style = calc_host_res_style_for(&msg->ip.sa);
+  copt.host_res_style = host_res_style_for(&msg->ip.sa);
   c->init(md5, copt);
   c->mutex = hostDB.lock_for_bucket(fold_md5(msg->md5) % hostDB.buckets);
   c->action.mutex = c->mutex;
@@ -2042,8 +2043,8 @@ put_hostinfo_ClusterFunction(ClusterHandler *ch, void *data, int len)
   md5.ip.assign(&msg->ip.sa);
   md5.port = ats_ip_port_host_order(&msg->ip.sa);
   md5.hash = msg->md5;
-  md5.db_mark = calc_db_mark(&msg->ip.sa);
-  copt.host_res_style = calc_host_res_style_for(&msg->ip.sa);
+  md5.db_mark = db_mark_for(&msg->ip.sa);
+  copt.host_res_style = host_res_style_for(&msg->ip.sa);
   c->init(md5, copt);
   c->mutex = hostDB.lock_for_bucket(fold_md5(msg->md5) % hostDB.buckets);
   c->from_cont = msg->cont;     // cannot use action if cont freed due to timeout

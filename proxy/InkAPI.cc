@@ -8285,7 +8285,7 @@ TSHttpTxnGetHostResStyle(TSHttpTxn txnp, TSHostResStyle* style)
     return TS_ERROR;
 
   if (style)
-    *style = static_cast<TSHostResStyle>(sm->ua_session->res_query_style);
+    *style = static_cast<TSHostResStyle>(sm->ua_session->res_host_res_style);
 
   return TS_SUCCESS;
 }
@@ -8299,7 +8299,7 @@ TSHttpTxnSetHostResStyle(TSHttpTxn txnp, TSHostResStyle style)
   HttpSM *sm = (HttpSM *) txnp;
   if (!sm->ua_session)
     return TS_ERROR;
-  sm->ua_session->res_query_style = static_cast<HostResStyle>(style);
+  sm->ua_session->res_host_res_style = static_cast<HostResStyle>(style);
   return TS_SUCCESS;
 }
 
@@ -8318,7 +8318,7 @@ TSHttpTxnSetHostResPreference(TSHttpTxn txnp, TSHostResPreferenceOrder order)
   sockaddr const* ip = vc->get_remote_addr();
   if (!ats_is_ip(ip)) return TS_ERROR;
 
-  sm->ua_session->res_query_style = static_cast<HostResStyle>(ats_res_calc_style(ip->sa_family, reinterpret_cast<DNSFamilyPreference*>(order)));
+  sm->ua_session->res_host_res_style = static_cast<HostResStyle>(ats_res_calc_style(ip->sa_family, reinterpret_cast<DNSFamilyPreference*>(order)));
   return TS_SUCCESS;
 }
 #endif //TS_NO_API
