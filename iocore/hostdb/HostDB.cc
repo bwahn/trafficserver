@@ -776,8 +776,9 @@ HostDBProcessor::getby(Continuation * cont,
   // Attempt to find the result in-line, for level 1 hits
   //
   if (!aforce_dns) {
-    bool loop = false; // Only loop on explicit set for retry.
+    bool loop;
     do {
+      loop = false; // Only loop on explicit set for retry.
       // find the partition lock
       //
       // TODO: Could we reuse the "mutex" above safely? I think so but not sure.
@@ -977,12 +978,13 @@ HostDBProcessor::getbyname_imm(Continuation * cont, process_hostdb_info_pfn proc
 #endif // SPLIT_DNS
   md5.refresh();
 
-  Debug("amc", "HostDB host query for %.*s - %s:%d", md5.host_len, md5.host_name, HOST_RES_STYLE_STRING[opt.host_res_style], md5.db_mark);
+  Debug("amc", "HostDB host query for %.*s - %s:%s", md5.host_len, md5.host_name, HOST_RES_STYLE_STRING[opt.host_res_style], string_for(md5.db_mark));
 
   // Attempt to find the result in-line, for level 1 hits
   if (!force_dns) {
-    bool loop = false; // loop only on explicit set for retry
+    bool loop;
     do {
+      loop = false; // loop only on explicit set for retry
       // find the partition lock
       ProxyMutex *bucket_mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
       MUTEX_TRY_LOCK(lock, bucket_mutex, thread);
@@ -2460,4 +2462,26 @@ ink_hostdb_init(ModuleVersion v)
 
   RecRegisterRawStat(hostdb_rsb, RECT_PROCESS,
                      "proxy.process.hostdb.bytes", RECD_INT, RECP_NULL, (int) hostdb_bytes_stat, RecRawStatSyncCount);
+
+  // Global configuration values.
+  char* ip_resolve = REC_ConfigReadString("proxy.config.hostdb.ip_resolve");
+  if (ip_resolve) {
+    parse_host_res_preferences(ip_resolve, host_res_default_preference_order);
+    if (is_debug_tag_set("amc")) {
+      bool first = true;
+      char out[1024];
+      int n = sizeof(out);
+      int zret = 0;
+      for ( int i = 0 ; i < N_HOST_RES_PREFERENCE ; ++i ) {
+        zret += snprintf(out+zret, n-zret, "%s%s", !first ? ";" : "",
+                         HOST_RES_PREFERENCE_STRING[host_res_default_preference_order[i]]);
+        if (HOST_RES_PREFER_NONE == host_res_default_preference_order[i])
+          break;
+        first = false;
+      }
+      Debug("amc", "Setting global host resolution preferences to %.*s", zret, out);
+    }
+  }
+  ats_free(ip_resolve);
+  
 }

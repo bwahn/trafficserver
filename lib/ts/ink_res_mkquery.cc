@@ -503,18 +503,18 @@ ns_name_ntop(const u_char *src, char *dst, size_t dstsiz)
 }
 
 HostResStyle
-ats_res_calc_style(int family, DNSFamilyPreferenceOrder order)
+ats_res_calc_style(int family, HostResPreferenceOrder order)
 {
   bool v4 = false, v6 = false;
-  DNSFamilyPreference client = AF_INET6 == family ? DNS_PREFER_IPV6 : DNS_PREFER_IPV4;
+  HostResPreference client = AF_INET6 == family ? HOST_RES_PREFER_IPV6 : HOST_RES_PREFER_IPV4;
 
-  for ( int i = 0 ; i < N_DNS_FAMILY_PREFERENCE_ORDER ; ++i ) {
-    DNSFamilyPreference p = order[i];
-    if (DNS_PREFER_CLIENT == p) p = client; // CLIENT -> actual value
-    if (DNS_PREFER_IPV4 == p) {
+  for ( int i = 0 ; i < N_HOST_RES_PREFERENCE_ORDER ; ++i ) {
+    HostResPreference p = order[i];
+    if (HOST_RES_PREFER_CLIENT == p) p = client; // CLIENT -> actual value
+    if (HOST_RES_PREFER_IPV4 == p) {
       if (v6) return HOST_RES_IPV6;
       else v4 = true;
-    } else if (DNS_PREFER_IPV6 == p) {
+    } else if (HOST_RES_PREFER_IPV6 == p) {
       if (v4) return HOST_RES_IPV4;
       else v6 = true;
     } else {

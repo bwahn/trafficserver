@@ -150,24 +150,24 @@
 
 /// IP family preference for DNS resolution.
 /// Used for configuration.
-enum DNSFamilyPreference {
-  DNS_PREFER_NONE = 0, ///< Invalid / init value.
-  DNS_PREFER_CLIENT, ///< Prefer family of client connection.
-  DNS_PREFER_IPV4, ///< Prefer IPv4.
-  DNS_PREFER_IPV6  ///< Prefer IPv6
+enum HostResPreference {
+  HOST_RES_PREFER_NONE = 0, ///< Invalid / init value.
+  HOST_RES_PREFER_CLIENT, ///< Prefer family of client connection.
+  HOST_RES_PREFER_IPV4, ///< Prefer IPv4.
+  HOST_RES_PREFER_IPV6  ///< Prefer IPv6
 };
 /// # of preference values.
-static int const N_DNS_FAMILY_PREFERENCE = DNS_PREFER_IPV6+1;
+static int const N_HOST_RES_PREFERENCE = HOST_RES_PREFER_IPV6+1;
 /// # of entries in a preference ordering.
-static int const N_DNS_FAMILY_PREFERENCE_ORDER = 3;
+static int const N_HOST_RES_PREFERENCE_ORDER = 3;
 /// Storage for preference ordering.
-typedef DNSFamilyPreference DNSFamilyPreferenceOrder[N_DNS_FAMILY_PREFERENCE_ORDER];
+typedef HostResPreference HostResPreferenceOrder[N_HOST_RES_PREFERENCE_ORDER];
 /// Global, hard wired default value for preference ordering.
-extern DNSFamilyPreferenceOrder const DNS_DEFAULT_FAMILY_PREFERENCE_ORDER;
+extern HostResPreferenceOrder const HOST_RES_DEFAULT_PREFERENCE_ORDER;
 /// Global (configurable) default.
-extern DNSFamilyPreferenceOrder dns_default_family_preference_order;
+extern HostResPreferenceOrder host_res_default_preference_order;
 /// String versions of @c FamilyPreference
-extern char const* const DNS_FAMILY_PREFERENCE_STRING[N_DNS_FAMILY_PREFERENCE];
+extern char const* const HOST_RES_PREFERENCE_STRING[N_HOST_RES_PREFERENCE];
 
 /// IP family to use in a DNS query for a host address.
 /// Used during DNS query operations.
@@ -179,15 +179,22 @@ enum HostResStyle{
   HOST_RES_IPV6_ONLY ///< Resolve only IPv6 addresses.
 };
 
-/// Strings for query styles
+/// Strings for host resolution styles
 extern char const* const HOST_RES_STYLE_STRING[];
 
 /// Caclulate the effective resolution preferences.
 extern HostResStyle
 ats_res_calc_style(
 		   int family, ///< Connection family
-		   DNSFamilyPreferenceOrder ///< Preference ordering.
+		   HostResPreferenceOrder ///< Preference ordering.
 		   );
+/** Parse a host resolution configuration string.
+ */
+extern void
+parse_host_res_preferences(
+			   char const* value, ///< [in] Configuration string.
+			   HostResPreferenceOrder order /// [out] Order to update.
+			   );
 
 #ifndef NS_GET16
 #define NS_GET16(s, cp) do { \

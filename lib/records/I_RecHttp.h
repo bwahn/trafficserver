@@ -114,9 +114,9 @@ public:
   /// Ordered preference for DNS resolution family ( @c FamilyPrefence )
   /// A value of @c PREFER_NONE indicates that entry and subsequent ones
   /// are invalid.
-  DNSFamilyPreferenceOrder m_host_res_preference;
+  HostResPreferenceOrder m_host_res_preference;
   /// Static preference list that is the default value.
-  static DNSFamilyPreferenceOrder const DEFAULT_HOST_RES_PREFERENCE;
+  static HostResPreferenceOrder const DEFAULT_HOST_RES_PREFERENCE;
 
   /// Default constructor.
   HttpProxyPort();
@@ -262,7 +262,7 @@ public:
   static char const* const OPT_SSL; ///< SSL (experimental)
   static char const* const OPT_BLIND_TUNNEL; ///< Blind tunnel.
   static char const* const OPT_COMPRESSED; ///< Compressed.
-  static char const* const OPT_DNS_FAMILY; ///< Set DNS family preference.
+  static char const* const OPT_HOST_RES; ///< Set DNS family preference.
 
   static Vec<self>& m_global; ///< Global ("default") data.
 

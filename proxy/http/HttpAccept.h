@@ -78,9 +78,9 @@ namespace detail {
     /// Set backdoor accept.
     self& setBackdoor(bool);
     /// Host address resolution preference order.
-    DNSFamilyPreferenceOrder host_res_preference;
+    HostResPreferenceOrder host_res_preference;
     /// Set the host query preference.
-    self& setHostResPreference(DNSFamilyPreferenceOrder const);
+    self& setHostResPreference(HostResPreferenceOrder const);
   };
 
   inline HttpAcceptOptions::HttpAcceptOptions()
@@ -89,7 +89,7 @@ namespace detail {
     , f_outbound_transparent(false)
     , backdoor(false)
   {
-    memcpy(host_res_preference, dns_default_family_preference_order, sizeof(host_res_preference));
+    memcpy(host_res_preference, host_res_default_preference_order, sizeof(host_res_preference));
   }
 
   inline HttpAcceptOptions&
@@ -131,7 +131,7 @@ namespace detail {
   }
 
   inline HttpAcceptOptions&
-  HttpAcceptOptions::setHostResPreference(DNSFamilyPreferenceOrder const order) {
+  HttpAcceptOptions::setHostResPreference(HostResPreferenceOrder const order) {
     memcpy(host_res_preference, order, sizeof(host_res_preference));
     return *this;
   }
