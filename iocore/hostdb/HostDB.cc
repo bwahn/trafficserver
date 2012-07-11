@@ -487,9 +487,12 @@ HostDBContinuation::init(HostDBMD5 const& the_md5, Options const& opt)
     if (md5.host_len > static_cast<int>(sizeof(md5_host_name_store)-1))
       md5.host_len = sizeof(md5_host_name_store)-1;
     memcpy(md5_host_name_store, md5.host_name, md5.host_len);
-    md5_host_name_store[md5.host_len] = 0;
-    md5.host_name = md5_host_name_store;
+  } else {
+    md5.host_len = 0;
   }
+  md5_host_name_store[md5.host_len] = 0;
+  md5.host_name = md5_host_name_store;
+
   host_res_style = opt.host_res_style;
   dns_lookup_timeout = opt.timeout;
   mutex = hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets));
