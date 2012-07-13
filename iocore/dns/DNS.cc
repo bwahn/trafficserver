@@ -1182,15 +1182,20 @@ dns_result(DNSHandler *h, DNSEntry *e, HostEnt *ent, bool retry) {
   }
   h->entries.remove(e);
 
-  if (is_addr_query(e->qtype)) {
-    ip_text_buffer buff;
-    char const* ptr = "<none>";
-    if (ent) ptr = inet_ntop(e->qtype == T_AAAA ? AF_INET6 : AF_INET, ent->ent.h_addr_list[0], buff, sizeof(buff));
-    Debug("dns", "%s result for %s = %s retry %d",
-      ent ? "SUCCESS" : "FAIL", e->qname, ptr, retry);
-  } else {
-    Debug("dns", "%s result for %s = %s af=%d retry %d",
-          ent ? "SUCCESS" : "FAIL", e->qname, (ent != NULL ? ent->ent.h_name : "<not found>"), ent->ent.h_addrtype, retry);
+  if (is_debug_tag_set("dns")) {
+    if (is_addr_query(e->qtype)) {
+      ip_text_buffer buff;
+      char const* ptr = "<none>";
+      char const* result = "FAIL";
+      if (ent) {
+        result = "SUCCESS";
+        ptr = inet_ntop(e->qtype == T_AAAA ? AF_INET6 : AF_INET, ent->ent.h_addr_list[0], buff, sizeof(buff));
+      }
+      Debug("dns", "%s result for %s = %s retry %d", result, e->qname, ptr, retry);
+    } else {
+      Debug("dns", "%s result for %s = %s af=%d retry %d",
+            ent ? "SUCCESS" : "FAIL", e->qname, (ent != NULL ? ent->ent.h_name : "<not found>"), ent->ent.h_addrtype, retry);
+    }
   }
 
   if (ent) {

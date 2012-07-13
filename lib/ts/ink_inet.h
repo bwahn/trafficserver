@@ -1028,6 +1028,10 @@ struct IpAddr {
   self& operator = (
     in_addr_t ip ///< Network order IPv4 address.
   );
+  /// Assign from IPv6 raw address.
+  self& operator = (
+    in6_addr const& ip
+  );
 
   /** Load from string.
       The address is copied to this object if the conversion is successful,
@@ -1097,6 +1101,13 @@ inline IpAddr&
 IpAddr::operator = (in_addr_t ip) {
   _family = AF_INET;
   _addr._ip4 = ip;
+  return *this;
+}
+
+inline IpAddr&
+IpAddr::operator = (in6_addr const& ip) {
+  _family = AF_INET6;
+  _addr._ip6 = ip;
   return *this;
 }
 

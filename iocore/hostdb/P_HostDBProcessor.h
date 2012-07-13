@@ -387,7 +387,7 @@ struct HostDBContinuation: public Continuation
   {
     return *md5.host_name && md5.db_mark == HOSTDB_MARK_SRV;
   }
-  HostDBInfo *lookup_done(sockaddr const* aip, char const* aname, bool round_robin, unsigned int attl, SRVHosts * s = NULL);
+  HostDBInfo *lookup_done(IpAddr const& ip, char const* aname, bool round_robin, unsigned int attl, SRVHosts * s = NULL);
   bool do_get_response(Event * e);
   void do_put_response(ClusterMachine * m, HostDBInfo * r, Continuation * cont);
   int failed_cluster_request(Event * e);

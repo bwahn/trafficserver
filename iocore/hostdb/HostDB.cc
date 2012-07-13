@@ -110,6 +110,20 @@ ip_addr_set(
   else ats_ip_invalidate(ip);
 }
 
+static inline void
+ip_addr_set(
+  IpAddr& ip, ///< Target storage.
+  uint8_t af, ///< Address format.
+  void* ptr ///< Raw address data
+) {
+  if (AF_INET6 == af)
+    ip = *static_cast<in6_addr*>(ptr);
+  else if (AF_INET == af)
+    ip = *static_cast<in_addr_t*>(ptr);
+  else
+    ip.invalidate();
+}
+
 inline void
 hostdb_cont_free(HostDBContinuation * cont)
 {
@@ -654,7 +668,7 @@ probe(ProxyMutex *mutex, HostDBMD5 const& md5, bool ignore_timeout)
         Debug("hostdb", "HostDB entry was set as deleted");
         return NULL;
       } else if (r->failed()) {
-        Debug("hostdb", "%.*s failed", md5.host_len, md5.host_name);
+        Debug("hostdb", "'%.*s' failed", md5.host_len, md5.host_name);
         if (r->is_ip_fail_timeout()) {
           Debug("hostdb", "fail timeout %u", r->ip_interval());
           return NULL;
@@ -712,20 +726,21 @@ probe(ProxyMutex *mutex, HostDBMD5 const& md5, bool ignore_timeout)
 HostDBInfo *
 HostDBContinuation::insert(unsigned int attl)
 {
-  ink_debug_assert(this_ethread() == hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets))->thread_holding);
   uint64_t folded_md5 = fold_md5(md5.hash);
+  int bucket = folded_md5 % hostDB.buckets;
+
+  ink_debug_assert(this_ethread() == hostDB.lock_for_bucket(bucket)->thread_holding);
   // remove the old one to prevent buildup
   HostDBInfo *old_r = hostDB.lookup_block(folded_md5, 3);
   if (old_r)
     hostDB.delete_block(old_r);
   HostDBInfo *r = hostDB.insert_block(folded_md5, NULL, 0);
-  Debug("hostdb_insert", "inserting in bucket %d", (int) (folded_md5 % hostDB.buckets));
   r->md5_high = md5.hash[1];
   if (attl > HOST_DB_MAX_TTL)
     attl = HOST_DB_MAX_TTL;
   r->ip_timeout_interval = attl;
   r->ip_timestamp = hostdb_current_interval;
-  Debug("hostdb", "inserting for: %.*s: (md5: %"PRIx64") now: %u timeout: %u ttl: %u", md5.host_len, md5.host_name, folded_md5, r->ip_timestamp,
+  Debug("hostdb", "inserting for: %.*s: (md5: %"PRIx64") bucket: %d now: %u timeout: %u ttl: %u", md5.host_len, md5.host_name, folded_md5, bucket, r->ip_timestamp,
         r->ip_timeout_interval, attl);
   return r;
 }
@@ -1229,12 +1244,12 @@ HostDBContinuation::removeEvent(int event, Event * e)
 // calling continuation or to the calling cluster node.
 //
 HostDBInfo *
-HostDBContinuation::lookup_done(sockaddr const* aip, char const* aname, bool around_robin, unsigned int ttl_seconds, SRVHosts * srv)
+HostDBContinuation::lookup_done(IpAddr const& ip, char const* aname, bool around_robin, unsigned int ttl_seconds, SRVHosts * srv)
 {
   HostDBInfo *i = NULL;
 
   ink_debug_assert(this_ethread() == hostDB.lock_for_bucket((int) (fold_md5(md5.hash) % hostDB.buckets))->thread_holding);
-  if (!aip || !ats_is_ip(aip) || !aname || !aname[0]) {
+  if (!ip.isValid() || !aname || !aname[0]) {
     if (is_byname()) {
       Debug("hostdb", "lookup_done() failed for '%.*s'", md5.host_len, md5.host_name);
     } else if (is_srv()) {
@@ -1246,6 +1261,7 @@ HostDBContinuation::lookup_done(sockaddr const* aip, char const* aname, bool aro
     i = insert(hostdb_ip_fail_timeout_interval);        // currently ... 0
     i->round_robin = false;
     i->reverse_dns = !is_byname() && !is_srv();
+    i->set_failed();
   } else {
     switch (hostdb_ttl_mode) {
     default:
@@ -1270,8 +1286,8 @@ HostDBContinuation::lookup_done(sockaddr const* aip, char const* aname, bool aro
     i = insert(ttl_seconds);
     if (is_byname()) {
       ip_text_buffer b;
-      Debug("hostdb", "done %s TTL %d", ats_ip_ntop(aip, b, sizeof b), ttl_seconds);
-      ats_ip_copy(i->ip(), aip);
+      Debug("hostdb", "done %s TTL %d", ip.toString(b, sizeof b), ttl_seconds);
+      ats_ip_set(i->ip(), ip);
       i->round_robin = around_robin;
       i->reverse_dns = false;
       if (md5.host_name != aname) {
@@ -1279,9 +1295,7 @@ HostDBContinuation::lookup_done(sockaddr const* aip, char const* aname, bool aro
       }
       i->is_srv = false;
     } else if (is_srv()) {
-
-      ats_ip_copy(i->ip(), aip);
-
+      ats_ip_set(i->ip(), ip);
       i->reverse_dns = false;
 
       if (srv) {                //failed case: srv == NULL
@@ -1461,21 +1475,23 @@ HostDBContinuation::dnsEvent(int event, HostEnt * e)
     } // else first is 0.
 
     HostDBInfo *r = NULL;
-    sockaddr_storage tip; // temporary IP data.
-    sockaddr* tip_ptr = ats_ip_sa_cast(&tip);
-    ats_ip_invalidate(tip_ptr);
-    if (first) ip_addr_set(tip_ptr, af, first);
+    IpAddr tip; // temp storage if needed.
 
-    if (is_byname())
-      r = lookup_done(tip_ptr, md5.host_name, rr, ttl_seconds, failed ? 0 : &e->srv_hosts);
-    else if (is_srv())
-      r = lookup_done(tip_ptr,  /* junk: FIXME: is the code in lookup_done() wrong to NEED this? */
+    if (is_byname()) {
+      if (first) ip_addr_set(tip, af, first);
+      r = lookup_done(tip, md5.host_name, rr, ttl_seconds, failed ? 0 : &e->srv_hosts);
+    } else if (is_srv()) {
+      if (first) ip_addr_set(tip, af, first);
+      r = lookup_done(tip,  /* junk: FIXME: is the code in lookup_done() wrong to NEED this? */
                       md5.host_name,     /* hostname */
                       rr,       /* is round robin, doesnt matter for SRV since we recheck getCount() inside lookup_done() */
                       ttl_seconds,      /* ttl in seconds */
                       failed ? 0 : &e->srv_hosts);
-    else
-      r = lookup_done(tip_ptr, failed ? md5.host_name : e->ent.h_name, false, ttl_seconds, failed ? 0 : &e->srv_hosts);
+    } else if (failed) {
+      r = lookup_done(tip, md5.host_name, false, ttl_seconds, 0);
+    } else {
+      r = lookup_done(md5.ip, e->ent.h_name, false, ttl_seconds, &e->srv_hosts);
+    }
 
     if (rr) {
       int s = HostDBRoundRobin::size(n, is_srv());
@@ -1859,11 +1875,11 @@ HostDBContinuation::do_dns()
   ink_assert(!action.cancelled);
   if (is_byname()) {
     Debug("hostdb", "DNS %s", md5.host_name);
-    IpEndpoint tip;
-    if (0 == ats_ip_pton(md5.host_name, &tip.sa)) {
+    IpAddr tip;
+    if (0 == tip.load(md5.host_name)) {
       // check 127.0.0.1 format // What the heck does that mean? - AMC
       if (action.continuation) {
-        HostDBInfo *r = lookup_done(&tip.sa, md5.host_name, false, HOST_DB_MAX_TTL, NULL);
+        HostDBInfo *r = lookup_done(tip, md5.host_name, false, HOST_DB_MAX_TTL, NULL);
         reply_to_cont(action.continuation, r);
       }
       hostdb_cont_free(this);
@@ -1927,12 +1943,10 @@ HostDBContinuation::clusterResponseEvent(int event, Event * e)
       action.continuation->handleEvent(EVENT_HOST_DB_GET_RESPONSE, failed ? 0 : this);
     }
   } else {
-    IpEndpoint iep;
-    ats_ip_set(&iep.sa, md5.ip, htons(md5.port));
     action = 0;
     // just a remote fill
     ink_assert(!missing);
-    lookup_done(&iep.sa, md5.host_name, false, ttl, NULL);
+    lookup_done(md5.ip, md5.host_name, false, ttl, NULL);
   }
   hostdb_cont_free(this);
   return EVENT_DONE;
@@ -1964,8 +1978,7 @@ HostDBContinuation::clusterEvent(int event, Event * e)
     }
     if (e) {
       HostDBContinuation *c = (HostDBContinuation *) e;
-      IpEndpoint iep;
-      HostDBInfo *r = lookup_done(ats_ip_set(&iep.sa, c->md5.ip, htons(c->md5.port)), c->md5.host_name, false, c->ttl, NULL);
+      HostDBInfo *r = lookup_done(md5.ip, c->md5.host_name, false, c->ttl, NULL);
       r->app.allotment.application1 = c->app.allotment.application1;
       r->app.allotment.application2 = c->app.allotment.application2;
 
